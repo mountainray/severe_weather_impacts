@@ -1,2 +1,2 @@
 # severe_weather_impacts
-united states sever weather impacts, health and economic
+united states severe weather impacts, health and economic
