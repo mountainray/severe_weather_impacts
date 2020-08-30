@@ -11,6 +11,8 @@
 # library(R.utils)
 #remove.packages("tidyverse")
 
+require(tidyverse)
+require(lubridate)
 # File naming details.
 raw_link <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 raw_zip_file_name <- "StormData.csv.bz2"
@@ -40,15 +42,14 @@ names(sample_refnum_list) <- "refnum"
 head(sample_refnum_list)
 storms <- inner_join(raw_storms, sample_refnum_list, by = "refnum") %>% 
 	select(state__:evtype, end_date, refnum) %>%
-	mutate(bgn_datex=as.Date(word(bgn_date,1,sep = " "), "%d/%M/%Y"),
-	       end_datex=as.Date(word(end_date,1,sep = " "), "%d/%M/%Y")) %>%
-	mutate(yearx=format(as.Date(bgn_datex), "%Y"),
-	       monthx=format(as.Date(bgn_datex), "%m"),
-	       dayx=format(as.Date(bgn_datex), "%d"),
-	       length_storm_days=end_datex-bgn_datex)
+	mutate(bgn_datex=mdy_hms(bgn_date),
+	       end_datex=mdy_hms(bgn_date),
+	       yearx=year(bgn_datex),
+	       monthx=month(bgn_datex),
+	       length_storm_days=period(end_datex-bgn_datex, units = "day"))
 head(storms)
 count(storms, length_storm_days)
-count(storms, yearx)
+count(storms, year(bgn_datex2))
 str(storms)
 
 #view(raw_storms)
