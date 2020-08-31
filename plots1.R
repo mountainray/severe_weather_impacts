@@ -5,7 +5,8 @@ count(us_storms, yearx)
 
 hist((filter(us_storms, propdmg<300 & yearx<1995)%>%count(propdmg))$propdmg)
 ggplot(us_storms) +
-	geom_bar(mapping = aes(x=yearx))
+	geom_bar(mapping = aes(x=yearx)) +
+	scale_x_continuous(breaks = seq(min(us_storms$yearx), max(us_storms$yearx), 5))
 
 check_non_us_50_states <- us_storms%>%mutate(us_state_50_flag=state %in% state.abb)%>%
 	filter(us_state_50_flag==FALSE) %>%

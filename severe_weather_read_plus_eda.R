@@ -64,7 +64,7 @@ us_storms <- inner_join(raw_us_storms, sample_refnum_list, by = "refnum") %>%
 	       bgn_datex, end_datex, yearx, monthx, storm_seconds, storm_days,
 	       fatalities, injuries,
 	       propdmg, propdmgexp,
-	       cropdmg, cropdmgexp)
+	       cropdmg, cropdmgexp) %>%
 	       
 #str(us_storms)
 
