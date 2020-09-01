@@ -13,7 +13,7 @@ output:
 
 Need to create the synopsis.
 
-# US Storm data -- Analysis using R
+## US Storm data -- Analysis using R
 
 #### Acronym used in this document
 
@@ -31,9 +31,7 @@ The purpose of this analysis is to assemble the analysis data, and report on key
 
 # Data Processing
 
-
-
-## Required R Packages, processing system details 
+### Required R Packages, processing system details 
 
 The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  Note that `lubridate` is also called, although it is not used much in this code.  
 
@@ -80,7 +78,9 @@ The following objects are masked from 'package:base':
     date, intersect, setdiff, union
 ```
 
-#### File naming details
+### **raw_us_storms** creation
+
+#### Raw file naming details
 
 Here are the names used in this work.  While the **.csv** inside the **.bz2** file can be read easily by R, it was decided a view of the raw, uncompressed data was of value for research purposes.  If an update occurs, or a new set of data (with the same layout) are available, one simply updates these settings.
 
@@ -227,46 +227,36 @@ For a real example, if "hail" is a high damage weather event, but is defined in 
 
 The second noteworthy item is the propdmgexp variable.  Below is taken from the page 12 of the documentation...
 
-Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000. Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions.
+	"Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000. Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions."
 
 Therefore the propdmg (and similarly cropdmg -- crop damage) value will be *expanded* accordingly.  The reader will see this in code below.
 
 In summary, three variables will be modified, the propdmg/cropdmg variables expanded, and the evtype values collapsed.  Note the expansion required for economic damage is due to very large numbers, and these are not observed in the injuries/fatalities variables.
 
-<!-- fact|value -->
-<!-- ----|----- -->
-<!-- **record count, raw file**|902297 -->
-<!-- **distinct refnum values**|902297 -->
-<!-- **distinct evtype values**|985 -->
-<!-- **example bgn_date value**|1/13/1972 0:00:00 -->
-<!-- **example evtype value**|TORNADO -->
-<!-- **example propdmg value**|250 -->
-<!-- **example propdmgexp value**|K -->
-<!-- **example injuries value**|2 -->
+The below fact table displays data from the raw_us_storms data...
 
 
 
 
-```r
-knitr::kable(facts_figures, 
-	     #col.names = c("value","fact"),
-             caption = "raw_us_storms fact table")
-```
+Table: **raw_us_storms fact table**
 
+|                                       |value             |
+|:--------------------------------------|:-----------------|
+|**record count, raw file**             |902297            |
+|**distinct refnum values**             |902297            |
+|**distinct evtype values**             |985               |
+|**distinct evtype values, damage > 0** |488               |
+|**example bgn_date value**             |1/13/1972 0:00:00 |
+|**example evtype value**               |TORNADO           |
+|**example propdmg value**              |250               |
+|**example propdmgexp value**           |K                 |
+|**example injuries value**             |2                 |
 
+#### Checking the refnum variable
 
-Table: raw_us_storms fact table
+It is important to confirm the consistency of the refnum variable.  For example, when a storm event affects multiple locations, are the same refnum values used?
 
-|                             |value             |
-|:----------------------------|:-----------------|
-|**record count, raw file**   |902297            |
-|**distinct refnum values**   |902297            |
-|**distinct evtype values**   |985               |
-|**example bgn_date value**   |1/13/1972 0:00:00 |
-|**example evtype value**     |TORNADO           |
-|**example propdmg value**    |250               |
-|**example propdmgexp value** |K                 |
-|**example injuries value**   |2                 |
+Below indicates this is a unique identifier, at the storm event level (time, place, type).
 
 
 ```r
@@ -316,11 +306,11 @@ nrow(raw_us_storms) == nrow(check_refnum)
 [1] TRUE
 ```
 
-#### take a sample to work with, it is easy to set to full data...
+#### **sample_us_storms** creation, sampling the data for development
 
 Due to a large amount of data (nearly 1mm records), a random sample is drawn to develop the analysis data.  The seed is set below to ensure reproducibility.  A sample of refnum values will be used to extract and work on the data.
 
-Note that the full analysis can be easily run by setting the sample_size value to 1 (one).
+Note that the full analysis can be easily run by setting the sample_size value to 1 (one).  In the end, the analysis will look at *total* damages and not averages, it will be important for the final run to set to full blown (sample_size 1).
 
 
 ```r
@@ -366,13 +356,13 @@ Below is code that will take the raw data and...
 1. sample down the data (when sample_size not 1)
 2. merge on by state the US region
 3. filter to keep only weather events that resulted in damage
-3. make real dates the character versions in raw
-4. filter older data out using a year cutoff value
-5. reduce the number of variables
-6. store the untouched version of evtype in evtype_original -- evtype is trimmed and set to lower case
-7. expand variables per above
+4. make real dates the character versions in raw
+5. filter older data out using a year cutoff value
+6. reduce the number of variables
+7. store the untouched version of evtype in evtype_original -- evtype is trimmed and set to lower case
+8. expand variables per above
 
-The results are shown below.
+The results are shown below.  One more **important** bit of logic, the economic_damage and health_damage variables are created.  Economic damage is the sum of property damage and crop damage (after expansion).  The health damage will be measured by the sum of the fatalities and injuries.
 
 
 ```r
@@ -524,7 +514,7 @@ This forms a list of words that will be taken out of the original event type val
 
 Then the code creates several basic weather event flags, such as the hail variable, which is a logical indicating the word "hail" was somewhere in the evtype value.  Note these are just flags that will be used subsequently to more broadly define the weather events.
 
-### modified_evtype creation
+### **modified_evtype** creation -- for collapsing detailed event values
 
 ```r
 modified_evtype <- raw_us_storms %>%
@@ -628,7 +618,7 @@ count(modified_evtype, hurri)
 2  TRUE  10
 ```
 
-### us_storms_final creation
+### **us_storms_final** creation
 
 Next the analysis data frame will be created.  We use the evtype_modified field to redefine the event types.  Note the evtype_original variable still contains the original, unadulterated values (for research/confirmation).  This is the key by which the smaller set of values is merged.  
 
@@ -650,14 +640,15 @@ us_storms_final <- sample_us_storms %>%
 	left_join(modified_evtype, by = "evtype_original") %>% 
 #	mutate(new_event_words4=str_trim(new_event_words4, side = "both")) %>%
 	mutate(evtype_modified_final=ifelse(hurri==TRUE, "hurricane",
-				       ifelse(fld==TRUE | flood==TRUE, "flood",
+				       ifelse((fld==TRUE | flood==TRUE) & grepl("coast", evtype_modified)==FALSE, "flood",
 				              ifelse(hail==TRUE, "thunderstorm hail",
 				              ifelse(lightning==TRUE, "thunderstorm lightning",
-				              ifelse((thu==TRUE | tst==TRUE) & wind==FALSE & lightning==FALSE, "thunderstorm",
+				             # ifelse((thu==TRUE | tst==TRUE) & wind==FALSE & lightning==FALSE, "thunderstorm",
 				                     ifelse((thu==TRUE | tst==TRUE) & wind==TRUE, "thunderstorm wind",
 				                            ifelse((thu==TRUE | tst==TRUE) 
 				                                   #& wind==FALSE 
-				                                   & lightning==TRUE, "thunderstorm lightning",
+				                                   #& lightning==TRUE
+				                                   , "thunderstorm lightning",
 				                            ifelse(evtype_modified %in% c("forest fire", "forest fires", "wildfire"), 
 				                                   "forest fire",
 				                            ifelse(evtype_modified %in% c("snow", "blizzard", "snow sleet freezing rain",
@@ -665,7 +656,11 @@ us_storms_final <- sample_us_storms %>%
 				                                   "winter snow",
 				                            ifelse(evtype_modified %in% c("rip current", "rip currents"), 
 				                                   "rip current",
-				                            evtype_modified)))))))))))
+				                            ifelse(evtype_modified %in% c("heat", "heat wave"), 
+				                                   "heat wave",
+				                            ifelse(evtype_modified %in% c("storm surge", "storm surge tide"), 
+				                                   "storm surge",
+				                            evtype_modified))))))))))))
 str(us_storms_final)
 ```
 
@@ -722,31 +717,31 @@ head(us_storms_final%>%count(evtype, evtype_modified_final), 20)
 ```
 
 ```
-                      evtype evtype_modified_final   n
-1        agricultural freeze   agricultural freeze   3
-2     astronomical high tide                  tide   8
-3      astronomical low tide              low tide   2
-4                  avalanche             avalanche 266
-5              beach erosion         beach erosion   1
-6                  black ice                   ice   1
-7                   blizzard           winter snow 230
-8               blowing dust          blowing dust   1
-9               blowing snow          blowing snow   2
-10          breakup flooding                 flood   1
-11                brush fire            brush fire   1
-12 coastal  flooding/erosion                 flood   1
-13           coastal erosion       coastal erosion   1
-14             coastal flood                 flood 156
-15          coastal flooding                 flood  36
-16  coastal flooding/erosion                 flood   3
-17             coastal storm         coastal storm   4
-18              coastalstorm          coastalstorm   1
-19                      cold                  cold  28
-20             cold and snow             cold snow   1
+                      evtype    evtype_modified_final   n
+1        agricultural freeze      agricultural freeze   3
+2     astronomical high tide                     tide   8
+3      astronomical low tide                 low tide   2
+4                  avalanche                avalanche 266
+5              beach erosion            beach erosion   1
+6                  black ice                      ice   1
+7                   blizzard              winter snow 230
+8               blowing dust             blowing dust   1
+9               blowing snow             blowing snow   2
+10          breakup flooding                    flood   1
+11                brush fire               brush fire   1
+12 coastal  flooding/erosion coastal flooding erosion   1
+13           coastal erosion          coastal erosion   1
+14             coastal flood            coastal flood 156
+15          coastal flooding         coastal flooding  36
+16  coastal flooding/erosion coastal flooding erosion   3
+17             coastal storm            coastal storm   4
+18              coastalstorm             coastalstorm   1
+19                      cold                     cold  28
+20             cold and snow                cold snow   1
 ```
 
 The above steps have taken the distinct weather event types from 330
-to 150 values.  Note this reduction happened with only minor requirements for manual entry/review.  Without this effort, it would be hard for the reader to get a sense of what really matters weatherwise, in terms of economic and health damage.
+to 151 values.  Note this reduction happened with only minor requirements for manual entry/review.  Without this effort, it would be hard for the reader to get a sense of what really matters weatherwise, in terms of economic and health damage.
 
 #### Top n lists...
 How much value is there in listing all 330 events?  Some of these will be one-off uniquely named events, such as "dust devil" (small damage, no adjectives to remove), which will not benefit the reader.  But picking a few out arbitrarily might miss important weather events, yielding an incomplete picture for the US.
@@ -787,23 +782,23 @@ top_n_harmful_economic_events
 
 ```
 # A tibble: 15 x 2
-   evtype_modified_final economic_damage2
-   <chr>                            <dbl>
- 1 flood                    167249006312.
- 2 hurricane                 90164972810 
- 3 storm surge               43193541000 
- 4 tornado                   25222315417.
- 5 thunderstorm hail         18032382482.
- 6 drought                   14968172000 
- 7 thunderstorm wind          9671157453.
- 8 tropical storm             8331171550 
- 9 forest fire                8163164130 
-10 wind                       6137851125 
-11 storm surge tide           4642038000 
-12 rain                       3871260240 
-13 ice storm                  3659215810 
-14 winter snow                2910317342.
-15 cold                       1358709400 
+   evtype_modified_final  economic_damage2
+   <chr>                             <dbl>
+ 1 flood                     166856316752.
+ 2 hurricane                  90164972810 
+ 3 storm surge                47835579000 
+ 4 tornado                    25222315417.
+ 5 thunderstorm hail          18032382482.
+ 6 drought                    14968172000 
+ 7 thunderstorm wind           9671157453.
+ 8 tropical storm              8331171550 
+ 9 forest fire                 8163164130 
+10 wind                        6137851125 
+11 rain                        3871260240 
+12 ice storm                   3659215810 
+13 winter snow                 2910317342.
+14 thunderstorm lightning      2024927713.
+15 cold                        1358709400 
 ```
 
 ```r
@@ -832,10 +827,10 @@ top_n_harmful_health_events
    evtype_modified_final  health_damage2
    <chr>                           <dbl>
  1 tornado                         23310
- 2 heat                            11630
- 3 flood                           10012
+ 2 heat wave                       12169
+ 3 flood                            9999
  4 thunderstorm wind                5986
- 5 thunderstorm lightning           5363
+ 5 thunderstorm lightning           5405
  6 winter snow                      3351
  7 wind                             1821
  8 forest fire                      1543
@@ -843,9 +838,9 @@ top_n_harmful_health_events
 10 rip current                      1088
 11 thunderstorm hail                1036
 12 fog                               779
-13 heat wave                         539
-14 dust storm                        441
-15 ice storm                         441
+13 dust storm                        441
+14 ice storm                         441
+15 tropical storm                    395
 ```
 
 Here we will reduce our data to items of interest (selected top n event types)...
@@ -873,21 +868,21 @@ print(economic,n=10)
 ```
 
 ```
-# A tibble: 227 x 6
+# A tibble: 243 x 6
 # Groups:   yearx [17]
    yearx evtype_modified… economic_damage2 mean_economic_d… neconomic_damag…
    <dbl> <chr>                       <dbl>            <dbl>            <int>
- 1  2006 flood                118824712570        89814598.             1323
+ 1  2006 flood                118772888570        91363760.             1300
  2  2005 hurricane             51799317000      1569676273.               33
  3  2005 storm surge           43058565000      1345580156.               32
  4  2004 hurricane             18922255800       675794850                28
  5  2011 tornado                9850961700         6789085.             1451
- 6  2011 flood                  9379815150         3387438.             2769
- 7  1997 flood                  7028552000         4963667.             1416
+ 6  2011 flood                  9352541150         3412091.             2741
+ 7  1997 flood                  7027872000         4970207.             1414
  8  1999 hurricane              5541066000       167911091.               33
- 9  2010 flood                  5196113440         1763786.             2946
+ 9  2010 flood                  5190458440         1775123.             2924
 10  2001 tropical storm         5188110000       370579286.               14
-# … with 217 more rows, and 1 more variable: xxxlog <dbl>
+# … with 233 more rows, and 1 more variable: xxxlog <dbl>
 ```
 
 ```r
@@ -913,17 +908,17 @@ print(health,n=top_n_filter_h)
 ```
 
 ```
-# A tibble: 222 x 6
+# A tibble: 232 x 6
    yearx evtype_modified… health_damage2 mean_health_dam… nhealth_damage2 xxxlog
    <dbl> <chr>                     <dbl>            <dbl>           <int>  <dbl>
  1  2011 tornado                    6750            28.0              241   3.83
- 2  1998 flood                      6581            51.0              129   3.82
- 3  1998 tornado                    2004            11.5              174   3.30
- 4  1995 heat                       1981            31.4               63   3.30
- 5  1999 heat                       1963            20.2               97   3.29
+ 2  1998 flood                      6576            51.4              128   3.82
+ 3  1995 heat wave                  2450            26.9               91   3.39
+ 4  1998 tornado                    2004            11.5              174   3.30
+ 5  1999 heat wave                  1963            20.2               97   3.29
  6  1999 tornado                    1936            13.6              142   3.29
  7  2008 tornado                    1819            10.6              172   3.26
- 8  2006 heat                       1765            27.2               65   3.25
+ 8  2006 heat wave                  1765            27.2               65   3.25
  9  2003 tornado                    1141            10.8              106   3.06
 10  1995 tornado                    1132             9.76             116   3.05
 11  1997 tornado                    1101             9.41             117   3.04
@@ -931,13 +926,13 @@ print(health,n=top_n_filter_h)
 13  2002 tornado                    1023            10.2              100   3.01
 14  2000 tornado                     923            10.4               89   2.97
 15  2004 hurricane                   862            95.8                9   2.94
-# … with 207 more rows
+# … with 217 more rows
 ```
 
 Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here:
 
-1. using a top top_n_filter_e list, 98.3879035% of the universe/all events
-2. using a top top_n_filter_h list, 94.6668868% of the universe/all events
+1. using a top 15 list, 98.8% of the universe/all events
+2. using a top 15 list, 95.3% of the universe/all events
 
 
 ```r
@@ -945,7 +940,7 @@ sum(economic$economic_damage2)/sum(sample_us_storms$economic_damage)
 ```
 
 ```
-[1] 0.983879
+[1] 0.9878192
 ```
 
 ```r
@@ -953,7 +948,7 @@ sum(health$health_damage2)/sum(sample_us_storms$health_damage)
 ```
 
 ```
-[1] 0.9466689
+[1] 0.9525028
 ```
 
 ```r
@@ -967,35 +962,91 @@ sum(health$health_damage2)/sum(sample_us_storms$health_damage)
 
 # Results
 
-Now for some plots...
+Now for some tables/plots...note there is a wide range in our values, so we plot using a log10 scale.  Knowing we have chosen the top n event types based on all of the data, we know these are important, but comparing the total damages is better left to a table of real values, see below.
+
+### Top n Economic Impacts
+
+Table: **Table 1, Total US weather event related Economic damage (Top 15), 1995 through 2011**
+
+|evtype_modified_final  | economic_damage2|
+|:----------------------|----------------:|
+|flood                  |     166856316752|
+|hurricane              |      90164972810|
+|storm surge            |      47835579000|
+|tornado                |      25222315417|
+|thunderstorm hail      |      18032382482|
+|drought                |      14968172000|
+|thunderstorm wind      |       9671157453|
+|tropical storm         |       8331171550|
+|forest fire            |       8163164130|
+|wind                   |       6137851125|
+|rain                   |       3871260240|
+|ice storm              |       3659215810|
+|winter snow            |       2910317342|
+|thunderstorm lightning |       2024927713|
+|cold                   |       1358709400|
 
 
 ```r
-options(scipen = 5)
+options(scipen = 8)
 
 ggplot(economic) +
-	geom_col(mapping = aes(x=yearx, 
+	geom_jitter(mapping = aes(x=yearx, 
 #			      y=xxxlog, 
 			      y=economic_damage2, 
-			      fill=evtype_modified_final), alpha=.7) + 
+			      color=evtype_modified_final), alpha=.8, show.legend = FALSE) + 
 	scale_y_log10() +
+	labs(x="", y="Damage, US Dollars (log10 scale)") +
 	facet_wrap("evtype_modified_final")
 ```
 
-![](PA2_template_files/figure-html/figure-1-economic-harm-1.png)<!-- -->
+![**Figure 1, Top 15 Annual US weather event related Economic damage, 1995 through 2011 (log10 scale)**](PA2_template_files/figure-html/figure-1-economic-harm-1.png)
+
+### Top n Health Impacts
+
+Table: **Table 2, Total US weather event related Health damage (Top 15) 1995 through 2011**
+
+|evtype_modified_final  | health_damage2|
+|:----------------------|--------------:|
+|tornado                |          23310|
+|heat wave              |          12169|
+|flood                  |           9999|
+|thunderstorm wind      |           5986|
+|thunderstorm lightning |           5405|
+|winter snow            |           3351|
+|wind                   |           1821|
+|forest fire            |           1543|
+|hurricane              |           1462|
+|rip current            |           1088|
+|thunderstorm hail      |           1036|
+|fog                    |            779|
+|dust storm             |            441|
+|ice storm              |            441|
+|tropical storm         |            395|
+
 
 
 ```r
 ggplot(health) +
-	geom_col(mapping = aes(x=yearx, 
+	geom_jitter(mapping = aes(x=yearx, 
 #			      y=xxxlog, 
 			      y=health_damage2, 
-			      fill=evtype_modified_final), alpha=.7) + 
+			      color=evtype_modified_final), alpha=.8, show.legend = FALSE) + 
 	scale_y_log10() +
+	labs(x="", y="Damage, Injuries and Deaths (log10 scale)") +
 	facet_wrap("evtype_modified_final")
 ```
 
-![](PA2_template_files/figure-html/figure-1-health-harm-1.png)<!-- -->
+![**Figure 2, Top 15 Annual US weather event related Health damage, 1995 through 2011 (log10 scale)**](PA2_template_files/figure-html/figure-1-health-harm-1.png)
+
+
+Some things to note and discuss...
+
+1. Fog -- this appears as a highly impactful weather event, but the data seems to stop early 2000's
+2. Thunderstorm -- appears data capture shifted away from simple thunderstorm designation, to more specific (e.g., lightning, wind)
+3.
+
+
 
 # Conclusion
 
