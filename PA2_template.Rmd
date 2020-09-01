@@ -18,12 +18,26 @@ Need to create the synopsis.
 
 # US Storm data -- Analysis using R
 
+#### Acronym used in this document
+
+* NCDC -- National Climatic Data Center
+* NWS -- National Weather Service
+
 #### Where does the data come from?
 NCDC receives Storm Data from the National Weather Service. The National Weather service receive their information from a variety of sources, which include but are not limited to: county, state an federal emergency management officials, local law enforcement officials, skywarn spotters, NW damage surveys, newspaper clipping services, the insurance industry and the general public.
+
+#### General data characteristics
+The data are generally characterized by having a time component (bgn_date, end_date, etc), as well as information input into databases/standard format by individual observers.  As there are many possibilities in describing broad terms such as economic and health impacts, there are many values for the weather event type (i.e., there are n=????? distinct event types in this data).
+
+
+#### How are the damage amounts determined?
+The National Weather Service makes a best guess using all available data at the time of the publication The damage amounts are received from a variety of sources, including those listed above in the Dat Sources section. Property and Crop damage should be considered as a broad estimate.
 
 The purpose of this analysis is to assemble the analysis data, and report on key features observed.
 
 # Data Processing
+
+
 
 ## Required R Packages, processing system details 
 
