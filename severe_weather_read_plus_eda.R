@@ -46,8 +46,8 @@ head(check_refnum)
 nrow(raw_us_storms) == nrow(check_refnum)
 
 set.seed(1234)
-sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 10000))
-#sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, .05 * nrow(raw_us_storms)))
+#sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 10000))
+sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 1 * nrow(raw_us_storms)))
 names(sample_refnum_list) <- "refnum"
 head(sample_refnum_list)
 

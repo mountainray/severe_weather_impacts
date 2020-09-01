@@ -3,13 +3,15 @@ set.seed(1234)
 #sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, .1 * nrow(raw_us_storms)))
 sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 1 * nrow(raw_us_storms)))
 names(sample_refnum_list) <- "refnum"
-head(sample_refnum_list)
+str(sample_refnum_list)
 
 state_df <- data.frame(state.abb, state.region)
 names(state_df) <- c("state", "region")
 head(state_df)
 
 yearx_cutoff <- 1995
+
+nrow(filter(raw_us_storms, (propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) & as.numeric(word(word(bgn_date,1,sep = " "),3,sep = "/"))>=1995))
 
 sample_us_storms <- inner_join(raw_us_storms, sample_refnum_list, by = "refnum") %>%
 	filter(propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) %>%
@@ -39,14 +41,16 @@ sample_us_storms <- inner_join(raw_us_storms, sample_refnum_list, by = "refnum")
 	mutate(economic_damage=newpropdmg+newcropdmg,
 	       health_damage=fatalities+injuries)
 head(sample_us_storms)
+str(sample_us_storms)
 count(sample_us_storms,yearx)
+
 max_words_evtype <- raw_us_storms%>%
 	filter(propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) %>% 
 	mutate(word_count=lengths(strsplit(str_trim(tolower(evtype), side = "both"), split = " ")))%>%
 	summarize(max_words=max(word_count))
 max_words_evtype
 
-word1x <-c("astronomical","black","drifting","dry",
+word1x <-c("astronomical","black","drifting","dry","dense",
 "downburst","excessive","extreme","flash","gusty",
 "hard","heavy","high","light","mixed",
 "record","severe","southeast",
@@ -209,7 +213,8 @@ ggplot(economic) +
 			      y=economic_damage2, 
 			      fill=evtype_modified_final), alpha=.7) + 
 	scale_y_log10() +
-	facet_wrap("evtype_modified_final")
+#	facet_wrap("evtype_modified_final")
+	facet_wrap(vars("ice storm", "cold"))
 
 ggplot(health) +
 	geom_col(mapping = aes(x=yearx, 

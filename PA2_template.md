@@ -1,5 +1,5 @@
 ---
-title: "US Storm event data:  Economic and Health impacts analysis"
+title: "US Storm events, Economic and Health impacts"
 author: "Ray Bem"
 date: "09/01/2020"
 output: 
@@ -11,14 +11,9 @@ output:
 
 # Synopsis
 
-Need to create the synopsis.
+Weather in the United States has data captured describing the Economic and Health damages resulting from various weather events.  These data are typically entered into a system affiliated with the National Weather System by observers throughout the country.  As such, there is a great challenge in separating out and combining the various versions of events like "flood" (e.g., "historic flood", "river flood", etc.).  We can capture a more accurate picture of what happens annually by investing code in systematically collapsing the possibilities.  We make this effort here, in a manner that is flexible enough to accept updated versions of raw data, or similar data from other sources.  The results are an interesting starting point, further work is recommended to fully analyze various aspects of this data.
 
-## US Storm data -- Analysis using R
-
-#### Acronym used in this document
-
-* NCDC -- National Climatic Data Center
-* NWS -- National Weather Service
+### US Storm data
 
 #### Where does the data come from?
 NCDC receives Storm Data from the National Weather Service. The National Weather service receive their information from a variety of sources, which include but are not limited to: county, state an federal emergency management officials, local law enforcement officials, skywarn spotters, NW damage surveys, newspaper clipping services, the insurance industry and the general public.
@@ -27,11 +22,9 @@ NCDC receives Storm Data from the National Weather Service. The National Weather
 #### How are the damage amounts determined?
 The National Weather Service makes a best guess using all available data at the time of the publication The damage amounts are received from a variety of sources, including those listed above in the Dat Sources section. Property and Crop damage should be considered as a broad estimate.
 
-The purpose of this analysis is to assemble the analysis data, and report on key features observed.
-
 # Data Processing
 
-### Required R Packages, processing system details 
+#### Required R Packages, processing system details 
 
 The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  Note that `lubridate` is also called, although it is not used much in this code.  
 
@@ -497,7 +490,7 @@ In other words, we want to remove some words that are included, but offer no con
 
 ```r
 words_to_remove <-c(
-"astronomical","black","drifting","dry",
+"astronomical","black", "dense", "drifting","dry",
 "downburst","excessive","extreme","flash","gusty",
 "hard","heavy","high","light","mixed",
 "record","severe","southeast",
@@ -577,7 +570,7 @@ head(modified_evtype, 20)
 10                   HEAVY RAIN                         rain FALSE FALSE FALSE
 11                    LIGHTNING                    lightning FALSE FALSE FALSE
 12            THUNDERSTORM WIND            thunderstorm wind FALSE FALSE FALSE
-13                    DENSE FOG                    dense fog FALSE FALSE FALSE
+13                    DENSE FOG                          fog FALSE FALSE FALSE
 14                  RIP CURRENT                  rip current FALSE FALSE FALSE
 15            THUNDERSTORM WINS            thunderstorm wins FALSE FALSE FALSE
 16               FLASH FLOODING                     flooding FALSE FALSE  TRUE
@@ -741,7 +734,7 @@ head(us_storms_final%>%count(evtype, evtype_modified_final), 20)
 ```
 
 The above steps have taken the distinct weather event types from 330
-to 151 values.  Note this reduction happened with only minor requirements for manual entry/review.  Without this effort, it would be hard for the reader to get a sense of what really matters weatherwise, in terms of economic and health damage.
+to 150 values.  Note this reduction happened with only minor requirements for manual entry/review.  Without this effort, it would be hard for the reader to get a sense of what really matters weatherwise, in terms of economic and health damage.
 
 #### Top n lists...
 How much value is there in listing all 330 events?  Some of these will be one-off uniquely named events, such as "dust devil" (small damage, no adjectives to remove), which will not benefit the reader.  But picking a few out arbitrarily might miss important weather events, yielding an incomplete picture for the US.
@@ -836,8 +829,8 @@ top_n_harmful_health_events
  8 forest fire                      1543
  9 hurricane                        1462
 10 rip current                      1088
-11 thunderstorm hail                1036
-12 fog                               779
+11 fog                              1065
+12 thunderstorm hail                1036
 13 dust storm                        441
 14 ice storm                         441
 15 tropical storm                    395
@@ -908,7 +901,7 @@ print(health,n=top_n_filter_h)
 ```
 
 ```
-# A tibble: 232 x 6
+# A tibble: 237 x 6
    yearx evtype_modified… health_damage2 mean_health_dam… nhealth_damage2 xxxlog
    <dbl> <chr>                     <dbl>            <dbl>           <int>  <dbl>
  1  2011 tornado                    6750            28.0              241   3.83
@@ -926,13 +919,13 @@ print(health,n=top_n_filter_h)
 13  2002 tornado                    1023            10.2              100   3.01
 14  2000 tornado                     923            10.4               89   2.97
 15  2004 hurricane                   862            95.8                9   2.94
-# … with 217 more rows
+# … with 222 more rows
 ```
 
 Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here:
 
 1. using a top 15 list, 98.8% of the universe/all events
-2. using a top 15 list, 95.3% of the universe/all events
+2. using a top 15 list, 95.6% of the universe/all events
 
 
 ```r
@@ -948,7 +941,7 @@ sum(health$health_damage2)/sum(sample_us_storms$health_damage)
 ```
 
 ```
-[1] 0.9525028
+[1] 0.956438
 ```
 
 ```r
@@ -964,7 +957,7 @@ sum(health$health_damage2)/sum(sample_us_storms$health_damage)
 
 Now for some tables/plots...note there is a wide range in our values, so we plot using a log10 scale.  Knowing we have chosen the top n event types based on all of the data, we know these are important, but comparing the total damages is better left to a table of real values, see below.
 
-### Top n Economic Impacts
+### Economic Impacts
 
 Table: **Table 1, Total US weather event related Economic damage (Top 15), 1995 through 2011**
 
@@ -1002,7 +995,7 @@ ggplot(economic) +
 
 ![**Figure 1, Top 15 Annual US weather event related Economic damage, 1995 through 2011 (log10 scale)**](PA2_template_files/figure-html/figure-1-economic-harm-1.png)
 
-### Top n Health Impacts
+### Health Impacts
 
 Table: **Table 2, Total US weather event related Health damage (Top 15) 1995 through 2011**
 
@@ -1018,8 +1011,8 @@ Table: **Table 2, Total US weather event related Health damage (Top 15) 1995 thr
 |forest fire            |           1543|
 |hurricane              |           1462|
 |rip current            |           1088|
+|fog                    |           1065|
 |thunderstorm hail      |           1036|
-|fog                    |            779|
 |dust storm             |            441|
 |ice storm              |            441|
 |tropical storm         |            395|
@@ -1040,14 +1033,13 @@ ggplot(health) +
 ![**Figure 2, Top 15 Annual US weather event related Health damage, 1995 through 2011 (log10 scale)**](PA2_template_files/figure-html/figure-1-health-harm-1.png)
 
 
-Some things to note and discuss...
+Some interesting things stand out, just a few thoughts on the data...
 
-1. Fog -- this appears as a highly impactful weather event, but the data seems to stop early 2000's
-2. Thunderstorm -- appears data capture shifted away from simple thunderstorm designation, to more specific (e.g., lightning, wind)
-3.
-
-
+1. For all health data, some weather events you can see some seasonality coming through, for example heat wave stands out
+2. A noticeable decline in health impacts of winter snow, could be a data issue
+3. For economic data, the economic damage due to "cold" seems to have missing data, this will need to be explored further
+4. Hurricanes and storm surges are highly variable in their economic damages, and ranked #2 and #3 overall (refer to Table 1)
 
 # Conclusion
 
-Some concluding remarks...
+Some concluding remarks...this was an interesting look at weather events in the United States and how data are captured.  It serves as a good reminder to dig into the raw data in an effort to get more out of the data.  The documentation reference codes that may have been helpful to have in this data (but were not included).  For example, instead of verbiage driving the classifications, codes would be better.  
