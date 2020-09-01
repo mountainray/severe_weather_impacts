@@ -33,8 +33,8 @@ ifelse(file.exists(raw_file_name) == FALSE,
 raw_names <- read.csv(raw_file_name, header=TRUE, nrows = 1)
 raw_us_storms <- read.csv(raw_file_name, stringsAsFactors = FALSE)
 head(raw_us_storms)
-str(raw_us_storms)
 names(raw_us_storms) <- tolower(names(raw_names))
+str(raw_us_storms)
 
 nrow(raw_us_storms)
 new_refnum <- as.data.frame(seq(1:nrow(raw_us_storms)))

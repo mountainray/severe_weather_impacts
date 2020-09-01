@@ -26,9 +26,6 @@ Need to create the synopsis.
 #### Where does the data come from?
 NCDC receives Storm Data from the National Weather Service. The National Weather service receive their information from a variety of sources, which include but are not limited to: county, state an federal emergency management officials, local law enforcement officials, skywarn spotters, NW damage surveys, newspaper clipping services, the insurance industry and the general public.
 
-#### General data characteristics
-The data are generally characterized by having a time component (bgn_date, end_date, etc), as well as information input into databases/standard format by individual observers.  As there are many possibilities in describing broad terms such as economic and health impacts, there are many values for the weather event type (i.e., there are n=????? distinct event types in this data).
-
 
 #### How are the damage amounts determined?
 The National Weather Service makes a best guess using all available data at the time of the publication The damage amounts are received from a variety of sources, including those listed above in the Dat Sources section. Property and Crop damage should be considered as a broad estimate.
@@ -41,7 +38,9 @@ The purpose of this analysis is to assemble the analysis data, and report on key
 
 ## Required R Packages, processing system details 
 
-The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  This work was developed on the following system:
+The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  Note that `lubridate` is also called, although it is not used much in this code.  
+
+This analysis work was developed on the following system:
 
 `r system("system_profiler SPHardwareDataType | grep 'Model Name:'", intern=TRUE)`
 `r system("system_profiler SPHardwareDataType | grep 'Processor Name:'", intern=TRUE)`
@@ -52,38 +51,108 @@ library(tidyverse)
 library(lubridate)
 ```
 
-#### File naming details.
+#### File naming details
+
+Here are the names used in this work.  While the **.csv** inside the **.bz2** file can be read easily by R, it was decided a view of the raw, uncompressed data was of value for research purposes.  If an update occurs, or a new set of data (with the same layout) are available, one simply updates these settings.
+
+Checks are performed to avoid repeated download/uncompress tasks on the raw file.
+
+1. assign raw file names
+2. download the file if necessary
+3. uncompress .bz2 file if necessary
+
 ```{r}
 raw_link <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 raw_zip_file_name <- "StormData.csv.bz2"
 raw_file_name <- "StormData.csv"
-```
 
-#### Get the file if necessary.
-
-```{r}
 ifelse(file.exists(raw_zip_file_name) == FALSE,
        download.file(raw_link, raw_zip_file_name),
        "file exists...you are good to go")
-```
 
-#### Make .csv available to examine raw data.
-
-The data in the beginning looks simple, but further down in the raw file very large text items, including large blank space are observed.
-
-```{r}
 ifelse(file.exists(raw_file_name) == FALSE,
        bunzip2(raw_zip_file_name),
        "StormData.csv exists")
 ```
 
+#### Read the data
+
+An examination of the raw data (e.g., UltraEdit, Notepad++) reveals:
+
+* upper case variable names in a header record
+* mixed case for much of the data, although most are upper case for EVTYPE (weather event type)
+* seems chronologically ordered (1950s through 2010s)
+* very large free text values for REMARKS variable, these appear at the end (i.e., more recent have remarks)
+
+The code below reads in the raw data, modifies the upper case names to lower case.  There is a REFNUM (now refnum) which appears to be an incremental key defining the weather events impacts.  A check is performed to test the consistency of refnum, it does indeed hold true that it is just a counter.
+
 ```{r}
 raw_names <- read.csv(raw_file_name, header=TRUE, nrows = 1)
 raw_us_storms <- read.csv(raw_file_name, stringsAsFactors = FALSE)
 head(raw_us_storms)
-str(raw_us_storms)
 names(raw_us_storms) <- tolower(names(raw_names))
+str(raw_us_storms)
+```
 
+#### Raw data facts
+
+The table below displays some key data about the raw file.  Two item are particularly noteworthy, the distinct event types (n=`r count(distinct(raw_us_storms, evtype))`) and the property damage "exp" (expansion?) variable, propdmgexp.
+
+As mentioned above, human observers are inputting these data, and as such there are a large number of weather evtype values.  While a complicated subject, weather in the United States could be described in more broad terms, with fewer evtype values.  Later in this analysis code will flag and re-define evtype to this end.  
+
+For a real example, if "hail" is a high damage weather event, but is defined in the data both as "HAIL", "HAIL 175" and "EXTREME HAIL" depending on the observer, a more accurate damage calculation occurs with all three hail evtype values summed together.  
+
+The second noteworthy item is the propdmgexp variable.  Below is taken from the page 12 of the documentation...
+
+Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000. Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions.
+
+Therefore the propdmg (and similarly cropdmg -- crop damage) value will be *expanded* accordingly.  The reader will see this in code below.
+
+In summary, three variables will be modified, the propdmg/cropdmg variables expanded, and the evtype values collapsed.  Note the expansion required for economic damage is due to very large numbers, and these are not observed in the injuries/fatalities variables.
+
+<!-- fact|value -->
+<!-- ----|----- -->
+<!-- **record count, raw file**|`r nrow(raw_us_storms)` -->
+<!-- **distinct refnum values**|`r count(distinct(raw_us_storms, refnum))` -->
+<!-- **distinct evtype values**|`r count(distinct(raw_us_storms, evtype))` -->
+<!-- **example bgn_date value**|`r raw_us_storms[1000,"bgn_date"]` -->
+<!-- **example evtype value**|`r raw_us_storms[1000,"evtype"]` -->
+<!-- **example propdmg value**|`r raw_us_storms[1000,"propdmg"]` -->
+<!-- **example propdmgexp value**|`r raw_us_storms[1000,"propdmgexp"]` -->
+<!-- **example injuries value**|`r raw_us_storms[1000,"injuries"]` -->
+
+```{r echo=FALSE}
+fact <- c("**record count, raw file**",
+	   "**distinct refnum values**",
+	   "**distinct evtype values**",
+	   "**example bgn_date value**",
+	   "**example evtype value**",
+	   "**example propdmg value**",
+	   "**example propdmgexp value**",
+	   "**example injuries value**")
+names(fact) <- "fact"
+
+fact_value1 <- as.character(nrow(raw_us_storms))
+fact_value2 <- as.character(count(distinct(raw_us_storms, refnum)))
+fact_value3 <- as.character(count(distinct(raw_us_storms, evtype)))
+fact_value4 <- as.character(raw_us_storms[1000,"bgn_date"])
+fact_value5 <- as.character(raw_us_storms[1000,"evtype"])
+fact_value6 <- as.character(raw_us_storms[1000,"propdmg"])
+fact_value7 <- as.character(raw_us_storms[1000,"propdmgexp"])
+fact_value8 <- as.character(raw_us_storms[1000,"injuries"])
+value <- union_all(fact_value1, fact_value2, fact_value3, fact_value4, 
+			 fact_value5, fact_value6, fact_value7, fact_value8)
+names(value) <- "value"
+facts_figures <- as.data.frame(value, fact)
+```
+
+```{r}
+knitr::kable(facts_figures, 
+	     #col.names = c("value","fact"),
+             caption = "raw_us_storms fact table")
+```
+
+```{r}
 nrow(raw_us_storms)
 new_refnum <- as.data.frame(seq(1:nrow(raw_us_storms)))
 names(new_refnum) <- "new_refnum"
@@ -96,14 +165,20 @@ nrow(raw_us_storms) == nrow(check_refnum)
 
 #### take a sample to work with, it is easy to set to full data...
 
+Due to a large amount of data (nearly 1mm records), a random sample is drawn to develop the analysis data.  The seed is set below to ensure reproducibility.  A sample of refnum values will be used to extract and work on the data.
+
+Note that the full analysis can be easily run by setting the sample_size value to 1 (one).
+
 ```{r}
 set.seed(1234)
-sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 1 * nrow(raw_us_storms)))
+#sample_size <- .1
+sample_size <- 1
+sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, sample_size * nrow(raw_us_storms)))
 names(sample_refnum_list) <- "refnum"
 head(sample_refnum_list)
 ```
 
-I chose to grab US "region" in case it is helpful in presentation...
+As the data cover the entire United States, for convenience the US "region" is obtained from R's built-in US state/region data frames.  This aids in determining the consistency within the state variable, as well as allowing for regional analysis (small number as opposed to all 50 states).  (*Note regional analyses are not included in this report*)
 
 ```{r}
 state_df <- data.frame(state.abb, state.region)
@@ -111,7 +186,18 @@ names(state_df) <- c("state", "region")
 head(state_df)
 ```
 
-Main work...choose a year cutoff.
+Below is code that will take the raw data and...
+
+1. sample down the data (when sample_size not 1)
+2. merge on by state the US region
+3. filter to keep only weather events that resulted in damage
+3. make real dates the character versions in raw
+4. filter older data out using a year cutoff value
+5. reduce the number of variables
+6. store the untouched version of evtype in evtype_original -- evtype is trimmed and set to lower case
+7. expand variables per above
+
+The results are shown below.
 
 ```{r}
 yearx_cutoff <- 1995
@@ -147,7 +233,13 @@ head(sample_us_storms)
 count(sample_us_storms,yearx)
 ```
 
-figure out the maximum words involved in the event types...
+A quick check on the evtype values -- which are now lower case, trimmed and the data filtered for damage and such -- indicates the distinct set of evtype values went from `r count(distinct(raw_us_storms, evtype))` to `r count(distinct(sample_us_storms, evtype))`.  Obviously reducing by `r count(distinct(raw_us_storms, evtype))-count(distinct(sample_us_storms, evtype))` event types greatly reduces the work required to collapse the various weather events to build a more accurate analysis.  
+
+#### Collapsing weather event values
+
+As noted above, a sample was used to develop.  As such the evtype redifinition work will be done on all of the data, therefore it is drawn from the raw_us_storms data and not the sample_us_storms data.
+
+Examples of evtype in the raw data include such values as "HURRICANE OPAL/HIGH WINDS" and "Blowing Snow".  The goal will be to isolate the individual words in the value...so the first step is to figure out the maximum words involved in the event types...
 
 ```{r}
 max_words_evtype <- raw_us_storms%>%
@@ -157,31 +249,30 @@ max_words_evtype <- raw_us_storms%>%
 max_words_evtype
 ```
 
-The following were coded after reviewing the individual words...we want to remove some words that are included, but offer no consistent distinction (e.g., "heavy rain" can simply be "rain").
+The next step is a bit out of order...the code further below -- modified_evtype creation, past the words_to_remove definition -- is the code that breaks the evtype into the `r max_words_evtype` words.  These were subsequently reviewed, the idea being to reduce/collapse data without affecting the real value (i.e., from big flood to flood).  Key adjectives are removed, the list being coded from the *manual review* of the distinct words (this did not take long).
 
-We also take care to trim the values, some come to us in the data with leading and trailing blanks.
+In other words, we want to remove some words that are included, but offer no consistent distinction (e.g., "heavy rain" can simply be "rain").
 
 ```{r}
-word1x <-c("astronomical","black","drifting","dry",
+words_to_remove <-c(
+"astronomical","black","drifting","dry",
 "downburst","excessive","extreme","flash","gusty",
 "hard","heavy","high","light","mixed",
 "record","severe","southeast",
 #"storm",
-"strong","summary","torrential","urban","sml",
-"wild","wintry")
-
-word2x<-c("advisory","august","damage","emily","erin",
-"high","mix","precip","roads","weather","weather/mix")
-
-word3x<-c("and","28","precip")
-
-word4x<-c("heavy")
-
-words_to_remove <- c(word1x, word2x, word3x, word4x, "hvy")
+"strong","summary","torrential","urban","sml","wild",
+#"wintry",
+"advisory","august","damage","emily","erin","high",
+#"mix",
+"precip","roads","weather","weather/mix",
+"and","28","precip","heavy","hvy")
 ```
 
-The words to drop get applied here
+This forms a list of words that will be taken out of the original event type values.  The code below breaks the original value into the 5 words, checks and blanks out the word if in words_to_remove, and cleans up residual blanks.
 
+Then the code creates several basic weather event flags, such as the hail variable, which is a logical indicating the word "hail" was somewhere in the evtype value.  Note these are just flags that will be used subsequently to more broadly define the weather events.
+
+### modified_evtype creation
 ```{r}
 modified_evtype <- raw_us_storms %>%
 	filter(propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) %>%
@@ -229,9 +320,20 @@ modified_evtype <- raw_us_storms %>%
 head(modified_evtype, 20)
 count(modified_evtype, hurri)
 ```
-#yearx_cutoff <- 1995
 
-Now we will finalize the analysis data frame.  We use the evtype_modified field to redefine the event types.  Note the evtype_original variable contains the original, unadulterated values (for research/confirmation).
+### us_storms_final creation
+
+Next the analysis data frame will be created.  We use the evtype_modified field to redefine the event types.  Note the evtype_original variable still contains the original, unadulterated values (for research/confirmation).  This is the key by which the smaller set of values is merged.  
+
+This yields the modified_evtype variable, which is then defined further using the flags created previously.  The final assignments are stored in the evtype_modified_final variable.
+
+#### Re-defining weather event types
+
+As observed, by eliminating adjectives and removing simple punctuation and such, the set of event types is now reduced.  The last step is to more broadly define important weather events so the damages attributed include as much of the real damage as possible.  If this is overdone, too much is rolled up into a category, therefore as see below, and interestingly, the "thunderstorm" type events are presented in three variations ("thunderstorm", "thunderstorm wind", and "thunderstorm lightning").  This was done as the raw data indicated these thunderstorm classifications were highly present -- the human observers (and subsequent NWS data consumers) are accustomed to these breakouts.
+
+Also noteworthy below, "lightning" itself is left stand-alone, not included with "thunderstorm lightning".  Again, this event type is highly present in the data, therefore left as its own classification.
+
+To roll the lightning/thunderstorms up into one thunderstorm classification will obviously mean a larger amount of damages due to the weather event, and thunderstorms will gain a higher place in a list of most damaging storm events.  More on this later.
 
 ```{r}
 us_storms_final <- sample_us_storms %>% 
@@ -250,22 +352,36 @@ us_storms_final <- sample_us_storms %>%
 				                                   & lightning==TRUE, "thunderstorm lightning",
 				                            ifelse(evtype_modified %in% c("forest fire", "forest fires", "wildfire"), 
 				                                   "forest fire",
-				                            ifelse(evtype_modified %in% c("snow", "blizzard", "snow sleet freezing rain","winter","winter storm"), 
+				                            ifelse(evtype_modified %in% c("snow", "blizzard", "snow sleet freezing rain",
+				                            			      "winter","winter storm", "wintry mix"), 
 				                                   "winter snow",
-				                            evtype_modified))))))))))
+				                            ifelse(evtype_modified %in% c("rip current", "rip currents"), 
+				                                   "rip current",
+				                            evtype_modified)))))))))))
 str(us_storms_final)
-us_storms_final%>%count(evtype, evtype_modified_final)
+head(us_storms_final%>%count(evtype, evtype_modified_final), 20)
 ```
 
-We will now determine how many items (event types) are worthy of display.  For example, to choose the "top 10 economic" events by assigning 10 to top_n_filter_e variable.  Assign the desired amount of top health data in a similar fashion.
+The above steps have taken the distinct weather event types from `r count(distinct(sample_us_storms, evtype))`
+to `r count(distinct(us_storms_final, evtype_modified_final))` values.  Note this reduction happened with only minor requirements for manual entry/review.  Without this effort, it would be hard for the reader to get a sense of what really matters weatherwise, in terms of economic and health damage.
 
-Further below we will see what this gives us in terms of "complete picture".
+#### Top n lists...
+How much value is there in listing all `r count(distinct(sample_us_storms, evtype))` events?  Some of these will be one-off uniquely named events, such as "dust devil" (small damage, no adjectives to remove), which will not benefit the reader.  But picking a few out arbitrarily might miss important weather events, yielding an incomplete picture for the US.
+
+Because there is a lot of data, and many event values, a reduction will occur.  To answer the question...
+
+"if one picks the n weather events with the highest total damages (economic or health), how close is this set to the universe in the data?"
+
+...a calculation will later be made.  That is, further below we will see what this gives us in terms of "complete picture".  
+
+#### Choose the top n values
+For example, to choose the "top 10 economic" events, assign 10 to top_n_filter_e variable.  Assign the desired amount of top health data in a similar fashion (setting top_n_filter_h).
 
 ```{r}
-top_n_filter_e <- 10
 top_n_filter_e <- 15
 top_n_filter_h <- 15
 
+# note here we pick the top n based on the event value
 top_harmful_economic_evtypes <- filter(us_storms_final, economic_damage>0) %>%
 	group_by(evtype_modified_final)%>%
 	summarize(economic_damage2=sum(economic_damage), 
@@ -274,10 +390,10 @@ top_harmful_economic_evtypes <- filter(us_storms_final, economic_damage>0) %>%
 	arrange(desc(economic_damage2))
 #	arrange(desc(mean_economic_damage2))
 
-#top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter,"evtype_modified_final"]
-top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter_e,"evtype_modified_final"]
+top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter_e,c("evtype_modified_final", "economic_damage2")]
 top_n_harmful_economic_events
 
+# note here we pick the top n based on the event value
 top_harmful_health_evtypes <- filter(us_storms_final, health_damage>0) %>%
 	group_by(evtype_modified_final)%>%
 	summarize(health_damage2=sum(health_damage), 
@@ -285,47 +401,44 @@ top_harmful_health_evtypes <- filter(us_storms_final, health_damage>0) %>%
 		  nhealth_damage2=n()) %>% 
 	arrange(desc(health_damage2))
 #	arrange(desc(mean_health_damage2))
-sum(top_harmful_health_evtypes$health_damage2)
+
 top_n_harmful_health_events <- top_harmful_health_evtypes[1:top_n_filter_h,c("evtype_modified_final","health_damage2")]
-#top_n_harmful_health_events <- top_harmful_health_evtypes[1:15,"evtype_modified_final"]
 top_n_harmful_health_events
 ```
 
-Here we will reduce our data to items of interest (selected top ## event types)...
+Here we will reduce our data to items of interest (selected top n event types)...
 
 ```{r}
+# note here we pick use the top n based on the event value, but group further by yearx
 economic <- filter(us_storms_final, economic_damage>0) %>%
-#	filter(yearx>=1995)%>% 
 	inner_join(top_n_harmful_economic_events, by = "evtype_modified_final") %>%
 #	group_by(yearx, region, evtype_modified_final)%>%
 	group_by(yearx, evtype_modified_final)%>%
-#	group_by(new_event_words5)%>%
 	summarize(economic_damage2=sum(economic_damage), 
 		  mean_economic_damage2=mean(economic_damage), 
 		  neconomic_damage2=n(),
 		  xxxlog=log10(economic_damage2)) %>% 
 	arrange(desc(economic_damage2))
-#	arrange(desc(mean_economic_damage2))
 print(economic,n=10)
 
-nrow(filter(us_storms_final, health_damage>0))
+# note here we pick use the top n based on the event value, but group further by yearx
 health <- filter(us_storms_final, health_damage>0) %>%
-#	filter(yearx>=1995)%>% 
 	inner_join(top_n_harmful_health_events, by = "evtype_modified_final") %>%
 #	group_by(yearx, region, evtype_modified_final)%>%
 	group_by(yearx, evtype_modified_final)%>%
-#	group_by(new_event_words5)%>%
 	summarize(health_damage2=sum(health_damage), 
 		  mean_health_damage2=mean(health_damage), 
 		  nhealth_damage2=n(),
 		  xxxlog=log10(health_damage2)) %>% ungroup %>%
 	arrange(desc(health_damage2))
 #	arrange(desc(mean_health_damage2))
-nrow(health)
 print(health,n=top_n_filter_h)
 ```
 
-Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here we cover over 90% of the data using the above settings...
+Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here:
+
+1. using a top top_n_filter_e list, `r (sum(economic$economic_damage2)/sum(sample_us_storms$economic_damage))*100`% of the universe/all events
+2. using a top top_n_filter_h list, `r (sum(health$health_damage2)/sum(sample_us_storms$health_damage))*100`% of the universe/all events
 
 ```{r}
 sum(economic$economic_damage2)/sum(sample_us_storms$economic_damage)
@@ -363,3 +476,7 @@ ggplot(health) +
 	scale_y_log10() +
 	facet_wrap("evtype_modified_final")
 ```
+
+# Conclusion
+
+Some concluding remarks...

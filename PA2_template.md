@@ -15,16 +15,29 @@ Need to create the synopsis.
 
 # US Storm data -- Analysis using R
 
+#### Acronym used in this document
+
+* NCDC -- National Climatic Data Center
+* NWS -- National Weather Service
+
 #### Where does the data come from?
 NCDC receives Storm Data from the National Weather Service. The National Weather service receive their information from a variety of sources, which include but are not limited to: county, state an federal emergency management officials, local law enforcement officials, skywarn spotters, NW damage surveys, newspaper clipping services, the insurance industry and the general public.
+
+
+#### How are the damage amounts determined?
+The National Weather Service makes a best guess using all available data at the time of the publication The damage amounts are received from a variety of sources, including those listed above in the Dat Sources section. Property and Crop damage should be considered as a broad estimate.
 
 The purpose of this analysis is to assemble the analysis data, and report on key features observed.
 
 # Data Processing
 
+
+
 ## Required R Packages, processing system details 
 
-The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  This work was developed on the following system:
+The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  Note that `lubridate` is also called, although it is not used much in this code.  
+
+This analysis work was developed on the following system:
 
       Model Name: iMac
       Processor Name: Quad-Core Intel Core i7
@@ -36,7 +49,7 @@ library(tidyverse)
 ```
 
 ```
-── Attaching packages ───────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.0 ──
+── Attaching packages ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.0 ──
 ```
 
 ```
@@ -47,7 +60,7 @@ library(tidyverse)
 ```
 
 ```
-── Conflicts ──────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+── Conflicts ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
 x dplyr::filter() masks stats::filter()
 x dplyr::lag()    masks stats::lag()
 ```
@@ -67,18 +80,22 @@ The following objects are masked from 'package:base':
     date, intersect, setdiff, union
 ```
 
-#### File naming details.
+#### File naming details
+
+Here are the names used in this work.  While the **.csv** inside the **.bz2** file can be read easily by R, it was decided a view of the raw, uncompressed data was of value for research purposes.  If an update occurs, or a new set of data (with the same layout) are available, one simply updates these settings.
+
+Checks are performed to avoid repeated download/uncompress tasks on the raw file.
+
+1. assign raw file names
+2. download the file if necessary
+3. uncompress .bz2 file if necessary
+
 
 ```r
 raw_link <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 raw_zip_file_name <- "StormData.csv.bz2"
 raw_file_name <- "StormData.csv"
-```
 
-#### Get the file if necessary.
-
-
-```r
 ifelse(file.exists(raw_zip_file_name) == FALSE,
        download.file(raw_link, raw_zip_file_name),
        "file exists...you are good to go")
@@ -87,11 +104,6 @@ ifelse(file.exists(raw_zip_file_name) == FALSE,
 ```
 [1] "file exists...you are good to go"
 ```
-
-#### Make .csv available to examine raw data.
-
-The data in the beginning looks simple, but further down in the raw file very large text items, including large blank space are observed.
-
 
 ```r
 ifelse(file.exists(raw_file_name) == FALSE,
@@ -102,6 +114,17 @@ ifelse(file.exists(raw_file_name) == FALSE,
 ```
 [1] "StormData.csv exists"
 ```
+
+#### Read the data
+
+An examination of the raw data (e.g., UltraEdit, Notepad++) reveals:
+
+* upper case variable names in a header record
+* mixed case for much of the data, although most are upper case for EVTYPE (weather event type)
+* seems chronologically ordered (1950s through 2010s)
+* very large free text values for REMARKS variable, these appear at the end (i.e., more recent have remarks)
+
+The code below reads in the raw data, modifies the upper case names to lower case.  There is a REFNUM (now refnum) which appears to be an incremental key defining the weather events impacts.  A check is performed to test the consistency of refnum, it does indeed hold true that it is just a counter.
 
 
 ```r
@@ -149,53 +172,104 @@ head(raw_us_storms)
 ```
 
 ```r
+names(raw_us_storms) <- tolower(names(raw_names))
 str(raw_us_storms)
 ```
 
 ```
 'data.frame':	902297 obs. of  37 variables:
- $ STATE__   : num  1 1 1 1 1 1 1 1 1 1 ...
- $ BGN_DATE  : chr  "4/18/1950 0:00:00" "4/18/1950 0:00:00" "2/20/1951 0:00:00" "6/8/1951 0:00:00" ...
- $ BGN_TIME  : chr  "0130" "0145" "1600" "0900" ...
- $ TIME_ZONE : chr  "CST" "CST" "CST" "CST" ...
- $ COUNTY    : num  97 3 57 89 43 77 9 123 125 57 ...
- $ COUNTYNAME: chr  "MOBILE" "BALDWIN" "FAYETTE" "MADISON" ...
- $ STATE     : chr  "AL" "AL" "AL" "AL" ...
- $ EVTYPE    : chr  "TORNADO" "TORNADO" "TORNADO" "TORNADO" ...
- $ BGN_RANGE : num  0 0 0 0 0 0 0 0 0 0 ...
- $ BGN_AZI   : chr  "" "" "" "" ...
- $ BGN_LOCATI: chr  "" "" "" "" ...
- $ END_DATE  : chr  "" "" "" "" ...
- $ END_TIME  : chr  "" "" "" "" ...
- $ COUNTY_END: num  0 0 0 0 0 0 0 0 0 0 ...
- $ COUNTYENDN: logi  NA NA NA NA NA NA ...
- $ END_RANGE : num  0 0 0 0 0 0 0 0 0 0 ...
- $ END_AZI   : chr  "" "" "" "" ...
- $ END_LOCATI: chr  "" "" "" "" ...
- $ LENGTH    : num  14 2 0.1 0 0 1.5 1.5 0 3.3 2.3 ...
- $ WIDTH     : num  100 150 123 100 150 177 33 33 100 100 ...
- $ F         : int  3 2 2 2 2 2 2 1 3 3 ...
- $ MAG       : num  0 0 0 0 0 0 0 0 0 0 ...
- $ FATALITIES: num  0 0 0 0 0 0 0 0 1 0 ...
- $ INJURIES  : num  15 0 2 2 2 6 1 0 14 0 ...
- $ PROPDMG   : num  25 2.5 25 2.5 2.5 2.5 2.5 2.5 25 25 ...
- $ PROPDMGEXP: chr  "K" "K" "K" "K" ...
- $ CROPDMG   : num  0 0 0 0 0 0 0 0 0 0 ...
- $ CROPDMGEXP: chr  "" "" "" "" ...
- $ WFO       : chr  "" "" "" "" ...
- $ STATEOFFIC: chr  "" "" "" "" ...
- $ ZONENAMES : chr  "" "" "" "" ...
- $ LATITUDE  : num  3040 3042 3340 3458 3412 ...
- $ LONGITUDE : num  8812 8755 8742 8626 8642 ...
- $ LATITUDE_E: num  3051 0 0 0 0 ...
- $ LONGITUDE_: num  8806 0 0 0 0 ...
- $ REMARKS   : chr  "" "" "" "" ...
- $ REFNUM    : num  1 2 3 4 5 6 7 8 9 10 ...
+ $ state__   : num  1 1 1 1 1 1 1 1 1 1 ...
+ $ bgn_date  : chr  "4/18/1950 0:00:00" "4/18/1950 0:00:00" "2/20/1951 0:00:00" "6/8/1951 0:00:00" ...
+ $ bgn_time  : chr  "0130" "0145" "1600" "0900" ...
+ $ time_zone : chr  "CST" "CST" "CST" "CST" ...
+ $ county    : num  97 3 57 89 43 77 9 123 125 57 ...
+ $ countyname: chr  "MOBILE" "BALDWIN" "FAYETTE" "MADISON" ...
+ $ state     : chr  "AL" "AL" "AL" "AL" ...
+ $ evtype    : chr  "TORNADO" "TORNADO" "TORNADO" "TORNADO" ...
+ $ bgn_range : num  0 0 0 0 0 0 0 0 0 0 ...
+ $ bgn_azi   : chr  "" "" "" "" ...
+ $ bgn_locati: chr  "" "" "" "" ...
+ $ end_date  : chr  "" "" "" "" ...
+ $ end_time  : chr  "" "" "" "" ...
+ $ county_end: num  0 0 0 0 0 0 0 0 0 0 ...
+ $ countyendn: logi  NA NA NA NA NA NA ...
+ $ end_range : num  0 0 0 0 0 0 0 0 0 0 ...
+ $ end_azi   : chr  "" "" "" "" ...
+ $ end_locati: chr  "" "" "" "" ...
+ $ length    : num  14 2 0.1 0 0 1.5 1.5 0 3.3 2.3 ...
+ $ width     : num  100 150 123 100 150 177 33 33 100 100 ...
+ $ f         : int  3 2 2 2 2 2 2 1 3 3 ...
+ $ mag       : num  0 0 0 0 0 0 0 0 0 0 ...
+ $ fatalities: num  0 0 0 0 0 0 0 0 1 0 ...
+ $ injuries  : num  15 0 2 2 2 6 1 0 14 0 ...
+ $ propdmg   : num  25 2.5 25 2.5 2.5 2.5 2.5 2.5 25 25 ...
+ $ propdmgexp: chr  "K" "K" "K" "K" ...
+ $ cropdmg   : num  0 0 0 0 0 0 0 0 0 0 ...
+ $ cropdmgexp: chr  "" "" "" "" ...
+ $ wfo       : chr  "" "" "" "" ...
+ $ stateoffic: chr  "" "" "" "" ...
+ $ zonenames : chr  "" "" "" "" ...
+ $ latitude  : num  3040 3042 3340 3458 3412 ...
+ $ longitude : num  8812 8755 8742 8626 8642 ...
+ $ latitude_e: num  3051 0 0 0 0 ...
+ $ longitude_: num  8806 0 0 0 0 ...
+ $ remarks   : chr  "" "" "" "" ...
+ $ refnum    : num  1 2 3 4 5 6 7 8 9 10 ...
 ```
 
-```r
-names(raw_us_storms) <- tolower(names(raw_names))
+#### Raw data facts
 
+The table below displays some key data about the raw file.  Two item are particularly noteworthy, the distinct event types (n=985) and the property damage "exp" (expansion?) variable, propdmgexp.
+
+As mentioned above, human observers are inputting these data, and as such there are a large number of weather evtype values.  While a complicated subject, weather in the United States could be described in more broad terms, with fewer evtype values.  Later in this analysis code will flag and re-define evtype to this end.  
+
+For a real example, if "hail" is a high damage weather event, but is defined in the data both as "HAIL", "HAIL 175" and "EXTREME HAIL" depending on the observer, a more accurate damage calculation occurs with all three hail evtype values summed together.  
+
+The second noteworthy item is the propdmgexp variable.  Below is taken from the page 12 of the documentation...
+
+Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000. Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions.
+
+Therefore the propdmg (and similarly cropdmg -- crop damage) value will be *expanded* accordingly.  The reader will see this in code below.
+
+In summary, three variables will be modified, the propdmg/cropdmg variables expanded, and the evtype values collapsed.  Note the expansion required for economic damage is due to very large numbers, and these are not observed in the injuries/fatalities variables.
+
+<!-- fact|value -->
+<!-- ----|----- -->
+<!-- **record count, raw file**|902297 -->
+<!-- **distinct refnum values**|902297 -->
+<!-- **distinct evtype values**|985 -->
+<!-- **example bgn_date value**|1/13/1972 0:00:00 -->
+<!-- **example evtype value**|TORNADO -->
+<!-- **example propdmg value**|250 -->
+<!-- **example propdmgexp value**|K -->
+<!-- **example injuries value**|2 -->
+
+
+
+
+```r
+knitr::kable(facts_figures, 
+	     #col.names = c("value","fact"),
+             caption = "raw_us_storms fact table")
+```
+
+
+
+Table: raw_us_storms fact table
+
+|                             |value             |
+|:----------------------------|:-----------------|
+|**record count, raw file**   |902297            |
+|**distinct refnum values**   |902297            |
+|**distinct evtype values**   |985               |
+|**example bgn_date value**   |1/13/1972 0:00:00 |
+|**example evtype value**     |TORNADO           |
+|**example propdmg value**    |250               |
+|**example propdmgexp value** |K                 |
+|**example injuries value**   |2                 |
+
+
+```r
 nrow(raw_us_storms)
 ```
 
@@ -244,10 +318,16 @@ nrow(raw_us_storms) == nrow(check_refnum)
 
 #### take a sample to work with, it is easy to set to full data...
 
+Due to a large amount of data (nearly 1mm records), a random sample is drawn to develop the analysis data.  The seed is set below to ensure reproducibility.  A sample of refnum values will be used to extract and work on the data.
+
+Note that the full analysis can be easily run by setting the sample_size value to 1 (one).
+
 
 ```r
 set.seed(1234)
-sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 1 * nrow(raw_us_storms)))
+#sample_size <- .1
+sample_size <- 1
+sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, sample_size * nrow(raw_us_storms)))
 names(sample_refnum_list) <- "refnum"
 head(sample_refnum_list)
 ```
@@ -262,7 +342,7 @@ head(sample_refnum_list)
 6 382504
 ```
 
-I chose to grab US "region" in case it is helpful in presentation...
+As the data cover the entire United States, for convenience the US "region" is obtained from R's built-in US state/region data frames.  This aids in determining the consistency within the state variable, as well as allowing for regional analysis (small number as opposed to all 50 states).  (*Note regional analyses are not included in this report*)
 
 
 ```r
@@ -281,7 +361,18 @@ head(state_df)
 6    CO   West
 ```
 
-Main work...choose a year cutoff.
+Below is code that will take the raw data and...
+
+1. sample down the data (when sample_size not 1)
+2. merge on by state the US region
+3. filter to keep only weather events that resulted in damage
+3. make real dates the character versions in raw
+4. filter older data out using a year cutoff value
+5. reduce the number of variables
+6. store the untouched version of evtype in evtype_original -- evtype is trimmed and set to lower case
+7. expand variables per above
+
+The results are shown below.
 
 
 ```r
@@ -387,7 +478,13 @@ count(sample_us_storms,yearx)
 17  2011 20570
 ```
 
-figure out the maximum words involved in the event types...
+A quick check on the evtype values -- which are now lower case, trimmed and the data filtered for damage and such -- indicates the distinct set of evtype values went from 985 to 330.  Obviously reducing by 655 event types greatly reduces the work required to collapse the various weather events to build a more accurate analysis.  
+
+#### Collapsing weather event values
+
+As noted above, a sample was used to develop.  As such the evtype redifinition work will be done on all of the data, therefore it is drawn from the raw_us_storms data and not the sample_us_storms data.
+
+Examples of evtype in the raw data include such values as "HURRICANE OPAL/HIGH WINDS" and "Blowing Snow".  The goal will be to isolate the individual words in the value...so the first step is to figure out the maximum words involved in the event types...
 
 
 ```r
@@ -403,32 +500,31 @@ max_words_evtype
 1         5
 ```
 
-The following were coded after reviewing the individual words...we want to remove some words that are included, but offer no consistent distinction (e.g., "heavy rain" can simply be "rain").
+The next step is a bit out of order...the code further below -- modified_evtype creation, past the words_to_remove definition -- is the code that breaks the evtype into the 5 words.  These were subsequently reviewed, the idea being to reduce/collapse data without affecting the real value (i.e., from big flood to flood).  Key adjectives are removed, the list being coded from the *manual review* of the distinct words (this did not take long).
 
-We also take care to trim the values, some come to us in the data with leading and trailing blanks.
+In other words, we want to remove some words that are included, but offer no consistent distinction (e.g., "heavy rain" can simply be "rain").
 
 
 ```r
-word1x <-c("astronomical","black","drifting","dry",
+words_to_remove <-c(
+"astronomical","black","drifting","dry",
 "downburst","excessive","extreme","flash","gusty",
 "hard","heavy","high","light","mixed",
 "record","severe","southeast",
 #"storm",
-"strong","summary","torrential","urban","sml",
-"wild","wintry")
-
-word2x<-c("advisory","august","damage","emily","erin",
-"high","mix","precip","roads","weather","weather/mix")
-
-word3x<-c("and","28","precip")
-
-word4x<-c("heavy")
-
-words_to_remove <- c(word1x, word2x, word3x, word4x, "hvy")
+"strong","summary","torrential","urban","sml","wild",
+#"wintry",
+"advisory","august","damage","emily","erin","high",
+#"mix",
+"precip","roads","weather","weather/mix",
+"and","28","precip","heavy","hvy")
 ```
 
-The words to drop get applied here
+This forms a list of words that will be taken out of the original event type values.  The code below breaks the original value into the 5 words, checks and blanks out the word if in words_to_remove, and cleans up residual blanks.
 
+Then the code creates several basic weather event flags, such as the hail variable, which is a logical indicating the word "hail" was somewhere in the evtype value.  Note these are just flags that will be used subsequently to more broadly define the weather events.
+
+### modified_evtype creation
 
 ```r
 modified_evtype <- raw_us_storms %>%
@@ -531,9 +627,20 @@ count(modified_evtype, hurri)
 1 FALSE 478
 2  TRUE  10
 ```
-#yearx_cutoff <- 1995
 
-Now we will finalize the analysis data frame.  We use the evtype_modified field to redefine the event types.  Note the evtype_original variable contains the original, unadulterated values (for research/confirmation).
+### us_storms_final creation
+
+Next the analysis data frame will be created.  We use the evtype_modified field to redefine the event types.  Note the evtype_original variable still contains the original, unadulterated values (for research/confirmation).  This is the key by which the smaller set of values is merged.  
+
+This yields the modified_evtype variable, which is then defined further using the flags created previously.  The final assignments are stored in the evtype_modified_final variable.
+
+#### Re-defining weather event types
+
+As observed, by eliminating adjectives and removing simple punctuation and such, the set of event types is now reduced.  The last step is to more broadly define important weather events so the damages attributed include as much of the real damage as possible.  If this is overdone, too much is rolled up into a category, therefore as see below, and interestingly, the "thunderstorm" type events are presented in three variations ("thunderstorm", "thunderstorm wind", and "thunderstorm lightning").  This was done as the raw data indicated these thunderstorm classifications were highly present -- the human observers (and subsequent NWS data consumers) are accustomed to these breakouts.
+
+Also noteworthy below, "lightning" itself is left stand-alone, not included with "thunderstorm lightning".  Again, this event type is highly present in the data, therefore left as its own classification.
+
+To roll the lightning/thunderstorms up into one thunderstorm classification will obviously mean a larger amount of damages due to the weather event, and thunderstorms will gain a higher place in a list of most damaging storm events.  More on this later.
 
 
 ```r
@@ -553,9 +660,12 @@ us_storms_final <- sample_us_storms %>%
 				                                   & lightning==TRUE, "thunderstorm lightning",
 				                            ifelse(evtype_modified %in% c("forest fire", "forest fires", "wildfire"), 
 				                                   "forest fire",
-				                            ifelse(evtype_modified %in% c("snow", "blizzard", "snow sleet freezing rain","winter","winter storm"), 
+				                            ifelse(evtype_modified %in% c("snow", "blizzard", "snow sleet freezing rain",
+				                            			      "winter","winter storm", "wintry mix"), 
 				                                   "winter snow",
-				                            evtype_modified))))))))))
+				                            ifelse(evtype_modified %in% c("rip current", "rip currents"), 
+				                                   "rip current",
+				                            evtype_modified)))))))))))
 str(us_storms_final)
 ```
 
@@ -608,353 +718,54 @@ str(us_storms_final)
 ```
 
 ```r
-us_storms_final%>%count(evtype, evtype_modified_final)
+head(us_storms_final%>%count(evtype, evtype_modified_final), 20)
 ```
 
 ```
-                            evtype  evtype_modified_final     n
-1              agricultural freeze    agricultural freeze     3
-2           astronomical high tide                   tide     8
-3            astronomical low tide               low tide     2
-4                        avalanche              avalanche   266
-5                    beach erosion          beach erosion     1
-6                        black ice                    ice     1
-7                         blizzard            winter snow   230
-8                     blowing dust           blowing dust     1
-9                     blowing snow           blowing snow     2
-10                breakup flooding                  flood     1
-11                      brush fire             brush fire     1
-12       coastal  flooding/erosion                  flood     1
-13                 coastal erosion        coastal erosion     1
-14                   coastal flood                  flood   156
-15                coastal flooding                  flood    36
-16        coastal flooding/erosion                  flood     3
-17                   coastal storm          coastal storm     4
-18                    coastalstorm           coastalstorm     1
-19                            cold                   cold    28
-20                   cold and snow              cold snow     1
-21         cold and wet conditions    cold wet conditions     1
-22                cold temperature       cold temperature     2
-23                       cold wave              cold wave     1
-24                    cold weather                   cold     4
-25                 cold/wind chill        cold wind chill    90
-26                       dam break              dam break     2
-27                 damaging freeze        damaging freeze     6
-28                       dense fog              dense fog    64
-29                     dense smoke            dense smoke     1
-30                       downburst                            1
-31                         drought                drought   264
-32          drought/excessive heat           drought heat    10
-33                        drowning               drowning     1
-34                  dry microburst             microburst    77
-35                      dust devil             dust devil    90
-36           dust devil waterspout  dust devil waterspout     1
-37                      dust storm             dust storm    98
-38                     early frost            early frost     1
-39              erosion/cstl flood                  flood     2
-40                  excessive heat                   heat   698
-41              excessive rainfall               rainfall     1
-42                  excessive snow            winter snow    25
-43               excessive wetness                wetness     1
-44                   extended cold          extended cold     1
-45                    extreme cold                   cold   179
-46         extreme cold/wind chill        cold wind chill   111
-47                    extreme heat                   heat    14
-48              extreme wind chill             wind chill     1
-49               extreme windchill              windchill    19
-50                falling snow/ice       falling snow ice     2
-51                     flash flood                  flood 19851
-52        flash flood - heavy rain                  flood     2
-53               flash flood winds                  flood     1
-54             flash flood/ street                  flood     1
-55               flash flood/flood                  flood     3
-56                  flash flooding                  flood   100
-57                    flash floods                  flood     8
-58                           flood                  flood  9712
-59              flood & heavy rain                  flood     2
-60                     flood/flash                  flood     1
-61               flood/flash flood                  flood    88
-62               flood/flash/flood                  flood     1
-63                flood/rain/winds                  flood     5
-64                        flooding                  flood    23
-65             flooding/heavy rain                  flood     1
-66                          floods                  flood     1
-67                             fog                    fog   104
-68                          freeze                 freeze    16
-69                freezing drizzle       freezing drizzle     7
-70                    freezing fog           freezing fog     7
-71                   freezing rain          freezing rain    18
-72              freezing rain/snow     freezing rain snow     3
-73                  freezing spray         freezing spray     1
-74                           frost                  frost     2
-75                    frost/freeze           frost freeze   117
-76                    funnel cloud           funnel cloud     9
-77                           glaze                  glaze    20
-78                       glaze ice              glaze ice     2
-79                   gradient wind          gradient wind     6
-80                     grass fires            grass fires     1
-81                        gustnado               gustnado     2
-82                      gusty wind                   wind    13
-83                 gusty wind/hail      thunderstorm hail     1
-84             gusty wind/hvy rain              wind rain     1
-85                 gusty wind/rain              wind rain     1
-86                     gusty winds                  winds    30
-87                            hail      thunderstorm hail 23860
-88                       hail 0.75      thunderstorm hail     1
-89                        hail 075      thunderstorm hail     1
-90                        hail 100      thunderstorm hail     1
-91                        hail 125      thunderstorm hail     1
-92                        hail 150      thunderstorm hail     1
-93                        hail 175      thunderstorm hail     2
-94                        hail 200      thunderstorm hail     1
-95                        hail 275      thunderstorm hail     3
-96                        hail 450      thunderstorm hail     1
-97                         hail 75      thunderstorm hail     1
-98                     hail damage      thunderstorm hail     1
-99                       hailstorm      thunderstorm hail     3
-100                    hard freeze                 freeze     2
-101                 hazardous surf         hazardous surf     1
-102                           heat                   heat   203
-103                      heat wave              heat wave    33
-104              heat wave drought      heat wave drought     1
-105                      heavy mix                            2
-106                     heavy rain                   rain  1080
-107           heavy rain and flood                  flood     1
-108           heavy rain/high surf              rain surf     1
-109      heavy rain/severe weather                   rain     1
-110                    heavy rains                  rains     4
-111                     heavy seas                   seas     2
-112                     heavy snow            winter snow  1134
-113      heavy snow and high winds             snow winds     1
-114    heavy snow and strong winds             snow winds     1
-115              heavy snow shower            snow shower     1
-116             heavy snow squalls           snow squalls    12
-117             heavy snow-squalls           snow squalls    15
-118  heavy snow/high winds & flood           snow winds &     1
-119                 heavy snow/ice               snow ice     1
-120                     heavy surf                   surf    30
-121            heavy surf and wind              surf wind     1
-122    heavy surf coastal flooding                  flood     1
-123           heavy surf/high surf              surf surf    50
-124                   heavy swells                 swells     1
-125                    high  winds                  winds     1
-126                      high seas                   seas     6
-127                      high surf                   surf   132
-128             high surf advisory                   surf     1
-129                    high swells                 swells     2
-130                     high water                  water     2
-131                     high waves                  waves     1
-132                      high wind                   wind  5416
-133                high wind (g40)             wind (g40)     2
-134               high wind damage                   wind     2
-135                     high winds                  winds   311
-136         high winds heavy rains            winds rains     1
-137                      hurricane              hurricane   126
-138              hurricane edouard              hurricane     1
-139                 hurricane erin              hurricane     7
-140                hurricane felix              hurricane     1
-141                 hurricane opal              hurricane     8
-142      hurricane opal/high winds              hurricane     1
-143     hurricane-generated swells              hurricane     3
-144              hurricane/typhoon              hurricane    72
-145                       hvy rain                   rain     1
-146          hyperthermia/exposure  hyperthermia exposure     1
-147           hypothermia/exposure   hypothermia exposure     6
-148                            ice                    ice     2
-149           ice jam flood (minor                  flood     1
-150               ice jam flooding                  flood     2
-151                    ice on road            ice on road     1
-152                      ice roads                    ice     1
-153                      ice storm              ice storm   653
-154               ice/strong winds              ice winds     1
-155                      icy roads                    icy    22
-156               lake effect snow       lake effect snow     4
-157                     lake flood                  flood     1
-158               lake-effect snow       lake effect snow   194
-159                lakeshore flood                  flood     5
-160                      landslide              landslide   193
-161                     landslides             landslides     1
-162                      landslump              landslump     1
-163                      landspout              landspout     2
-164               late season snow       late season snow     1
-165            light freezing rain          freezing rain    22
-166                     light snow            winter snow   141
-167                 light snowfall               snowfall     1
-168                      lightning thunderstorm lightning 12026
-169             lightning  wauseon thunderstorm lightning     1
-170       lightning and heavy rain thunderstorm lightning     1
-171 lightning and thunderstorm win thunderstorm lightning     1
-172                 lightning fire thunderstorm lightning     1
-173               lightning injury thunderstorm lightning     1
-174   lightning thunderstorm winds thunderstorm lightning     1
-175                     lightning. thunderstorm lightning     1
-176                      ligntning              ligntning     1
-177                marine accident        marine accident     1
-178                    marine hail      thunderstorm hail     2
-179               marine high wind            marine wind    19
-180                  marine mishap          marine mishap     2
-181             marine strong wind            marine wind    46
-182       marine thunderstorm wind      thunderstorm wind    33
-183               marine tstm wind      thunderstorm wind   109
-184                     microburst             microburst     1
-185                   mixed precip                            6
-186            mixed precipitation          precipitation    18
-187                      mud slide              mud slide     2
-188      mud slides urban flooding                  flood     1
-189                       mudslide               mudslide     5
-190                      mudslides              mudslides     1
-191                  non tstm wind      thunderstorm wind     1
-192         non-severe wind damage               non wind     1
-193                  non-tstm wind      thunderstorm wind     1
-194                          other                  other    34
-195                           rain                   rain     3
-196                      rain/snow              rain snow     2
-197           rapidly rising water   rapidly rising water     1
-198                    record cold                   cold     1
-199                    record heat                   heat     1
-200                    rip current            rip current   389
-201                   rip currents           rip currents   241
-202        rip currents/heavy surf      rip currents surf     2
-203         river and stream flood                  flood     2
-204                    river flood                  flood    95
-205                 river flooding                  flood    14
-206                     rock slide             rock slide     1
-207                     rogue wave             rogue wave     1
-208                     rough seas             rough seas     3
-209                     rough surf             rough surf     2
-210                    rural flood                  flood     1
-211                         seiche                 seiche     9
-212            severe thunderstorm           thunderstorm     5
-213      severe thunderstorm winds      thunderstorm wind     3
-214           severe thunderstorms           thunderstorm     2
-215                          sleet                  sleet     1
-216                     small hail      thunderstorm hail    11
-217                           snow            winter snow    31
-218                   snow and ice               snow ice     3
-219             snow freezing rain     snow freezing rain    10
-220                    snow squall            snow squall     3
-221                   snow squalls           snow squalls    10
-222                       snow/ice               snow ice     1
-223       snow/sleet/freezing rain            winter snow     2
-224              storm force winds      storm force winds     1
-225                    storm surge            storm surge   169
-226               storm surge/tide       storm surge tide    47
-227                    strong wind                   wind  3370
-228                   strong winds                  winds    48
-229            thundeerstorm winds      thunderstorm wind     1
-230            thunderestorm winds      thunderstorm wind     1
-231                    thundersnow           thunderstorm     1
-232                   thunderstorm           thunderstorm    14
-233            thunderstorm  winds      thunderstorm wind     2
-234         thunderstorm damage to           thunderstorm     1
-235              thunderstorm wind      thunderstorm wind 43170
-236        thunderstorm wind (g40)      thunderstorm wind     1
-237       thunderstorm wind 60 mph      thunderstorm wind     2
-238       thunderstorm wind 65 mph      thunderstorm wind     1
-239        thunderstorm wind 65mph      thunderstorm wind     1
-240       thunderstorm wind 98 mph      thunderstorm wind     1
-241          thunderstorm wind g52      thunderstorm wind     1
-242          thunderstorm wind g55      thunderstorm wind     1
-243          thunderstorm wind g60      thunderstorm wind     1
-244        thunderstorm wind trees      thunderstorm wind     1
-245             thunderstorm wind.      thunderstorm wind     1
-246        thunderstorm wind/ tree      thunderstorm wind     1
-247       thunderstorm wind/ trees      thunderstorm wind     4
-248       thunderstorm wind/awning      thunderstorm wind     1
-249    thunderstorm wind/lightning thunderstorm lightning     1
-250             thunderstorm winds      thunderstorm wind  5096
-251      thunderstorm winds 63 mph      thunderstorm wind     1
-252         thunderstorm winds and      thunderstorm wind     1
-253         thunderstorm winds g60      thunderstorm wind     1
-254        thunderstorm winds hail      thunderstorm hail    40
-255   thunderstorm winds lightning thunderstorm lightning     6
-256      thunderstorm winds/ flood                  flood     2
-257        thunderstorm winds/hail      thunderstorm hail     3
-258           thunderstorm winds53      thunderstorm wind     1
-259         thunderstorm windshail      thunderstorm hail     1
-260            thunderstorm windss      thunderstorm wind     6
-261              thunderstorm wins           thunderstorm     1
-262             thunderstorms wind      thunderstorm wind     1
-263            thunderstorms winds      thunderstorm wind     4
-264                  thunderstormw           thunderstorm     1
-265              thundertorm winds      thunderstorm wind     3
-266              thunerstorm winds      thunderstorm wind     1
-267                 tidal flooding                  flood     4
-268                        tornado                tornado 13000
-269                     tornado f0             tornado f0     5
-270                     tornado f1             tornado f1     4
-271                     tornado f2             tornado f2     2
-272                     tornado f3             tornado f3     2
-273            torrential rainfall               rainfall     1
-274            tropical depression    tropical depression    35
-275                 tropical storm         tropical storm   412
-276            tropical storm dean    tropical storm dean     1
-277           tropical storm jerry   tropical storm jerry     2
-278                      tstm wind      thunderstorm wind 61903
-279               tstm wind  (g45)      thunderstorm wind     1
-280                 tstm wind (41)      thunderstorm wind     1
-281                tstm wind (g35)      thunderstorm wind     1
-282                tstm wind (g40)      thunderstorm wind     9
-283                tstm wind (g45)      thunderstorm wind    37
-284                   tstm wind 40      thunderstorm wind     1
-285                   tstm wind 45      thunderstorm wind     1
-286                   tstm wind 55      thunderstorm wind     2
-287                  tstm wind 65)      thunderstorm wind     1
-288        tstm wind and lightning thunderstorm lightning     1
-289               tstm wind damage      thunderstorm wind     1
-290                  tstm wind g45      thunderstorm wind     1
-291                  tstm wind g58      thunderstorm wind     1
-292                 tstm wind/hail      thunderstorm hail   441
-293                     tstm winds      thunderstorm wind     5
-294                        tsunami                tsunami    14
-295               tunderstorm wind       tunderstorm wind     1
-296                        typhoon                typhoon     9
-297              unseasonable cold      unseasonable cold     1
-298              unseasonably cold      unseasonably cold     4
-299              unseasonably warm      unseasonably warm     7
-300      unseasonably warm and dry      unseasonably warm     1
-301                unseasonal rain        unseasonal rain     2
-302 urban and small stream floodin                  flood     1
-303                    urban flood                  flood    62
-304                 urban flooding                  flood    21
-305       urban/small stream flood                  flood     6
-306           urban/sml stream fld                  flood   702
-307                   volcanic ash           volcanic ash     2
-308                   warm weather                   warm     1
-309                     waterspout             waterspout    30
-310             waterspout tornado     waterspout tornado     1
-311             waterspout-tornado     waterspout tornado     1
-312            waterspout/ tornado     waterspout tornado     1
-313             waterspout/tornado     waterspout tornado     2
-314                 wet microburst         wet microburst     3
-315                      whirlwind              whirlwind     3
-316                     wild fires                  fires     2
-317               wild/forest fire            forest fire   383
-318              wild/forest fires            forest fire     1
-319                       wildfire            forest fire   853
-320                           wind                   wind    73
-321                  wind and wave              wind wave     1
-322                    wind damage                   wind     8
-323                     wind storm             wind storm     1
-324                          winds                  winds     6
-325                   winter storm            winter snow  1479
-326        winter storm high winds     winter storm winds     1
-327                 winter weather            winter snow   407
-328             winter weather mix            winter snow     2
-329             winter weather/mix            winter snow   139
-330                     wintry mix                            4
+                      evtype evtype_modified_final   n
+1        agricultural freeze   agricultural freeze   3
+2     astronomical high tide                  tide   8
+3      astronomical low tide              low tide   2
+4                  avalanche             avalanche 266
+5              beach erosion         beach erosion   1
+6                  black ice                   ice   1
+7                   blizzard           winter snow 230
+8               blowing dust          blowing dust   1
+9               blowing snow          blowing snow   2
+10          breakup flooding                 flood   1
+11                brush fire            brush fire   1
+12 coastal  flooding/erosion                 flood   1
+13           coastal erosion       coastal erosion   1
+14             coastal flood                 flood 156
+15          coastal flooding                 flood  36
+16  coastal flooding/erosion                 flood   3
+17             coastal storm         coastal storm   4
+18              coastalstorm          coastalstorm   1
+19                      cold                  cold  28
+20             cold and snow             cold snow   1
 ```
 
-We will now determine how many items (event types) are worthy of display.  For example, to choose the "top 10 economic" events by assigning 10 to top_n_filter_e variable.  Assign the desired amount of top health data in a similar fashion.
+The above steps have taken the distinct weather event types from 330
+to 150 values.  Note this reduction happened with only minor requirements for manual entry/review.  Without this effort, it would be hard for the reader to get a sense of what really matters weatherwise, in terms of economic and health damage.
 
-Further below we will see what this gives us in terms of "complete picture".
+#### Top n lists...
+How much value is there in listing all 330 events?  Some of these will be one-off uniquely named events, such as "dust devil" (small damage, no adjectives to remove), which will not benefit the reader.  But picking a few out arbitrarily might miss important weather events, yielding an incomplete picture for the US.
+
+Because there is a lot of data, and many event values, a reduction will occur.  To answer the question...
+
+"if one picks the n weather events with the highest total damages (economic or health), how close is this set to the universe in the data?"
+
+...a calculation will later be made.  That is, further below we will see what this gives us in terms of "complete picture".  
+
+#### Choose the top n values
+For example, to choose the "top 10 economic" events, assign 10 to top_n_filter_e variable.  Assign the desired amount of top health data in a similar fashion (setting top_n_filter_h).
 
 
 ```r
-top_n_filter_e <- 10
 top_n_filter_e <- 15
 top_n_filter_h <- 15
 
+# note here we pick the top n based on the event value
 top_harmful_economic_evtypes <- filter(us_storms_final, economic_damage>0) %>%
 	group_by(evtype_modified_final)%>%
 	summarize(economic_damage2=sum(economic_damage), 
@@ -970,33 +781,33 @@ top_harmful_economic_evtypes <- filter(us_storms_final, economic_damage>0) %>%
 ```r
 #	arrange(desc(mean_economic_damage2))
 
-#top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter,"evtype_modified_final"]
-top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter_e,"evtype_modified_final"]
+top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter_e,c("evtype_modified_final", "economic_damage2")]
 top_n_harmful_economic_events
 ```
 
 ```
-# A tibble: 15 x 1
-   evtype_modified_final
-   <chr>                
- 1 flood                
- 2 hurricane            
- 3 storm surge          
- 4 tornado              
- 5 thunderstorm hail    
- 6 drought              
- 7 thunderstorm wind    
- 8 tropical storm       
- 9 forest fire          
-10 wind                 
-11 storm surge tide     
-12 rain                 
-13 ice storm            
-14 winter snow          
-15 cold                 
+# A tibble: 15 x 2
+   evtype_modified_final economic_damage2
+   <chr>                            <dbl>
+ 1 flood                    167249006312.
+ 2 hurricane                 90164972810 
+ 3 storm surge               43193541000 
+ 4 tornado                   25222315417.
+ 5 thunderstorm hail         18032382482.
+ 6 drought                   14968172000 
+ 7 thunderstorm wind          9671157453.
+ 8 tropical storm             8331171550 
+ 9 forest fire                8163164130 
+10 wind                       6137851125 
+11 storm surge tide           4642038000 
+12 rain                       3871260240 
+13 ice storm                  3659215810 
+14 winter snow                2910317342.
+15 cold                       1358709400 
 ```
 
 ```r
+# note here we pick the top n based on the event value
 top_harmful_health_evtypes <- filter(us_storms_final, health_damage>0) %>%
 	group_by(evtype_modified_final)%>%
 	summarize(health_damage2=sum(health_damage), 
@@ -1011,16 +822,8 @@ top_harmful_health_evtypes <- filter(us_storms_final, health_damage>0) %>%
 
 ```r
 #	arrange(desc(mean_health_damage2))
-sum(top_harmful_health_evtypes$health_damage2)
-```
 
-```
-[1] 72678
-```
-
-```r
 top_n_harmful_health_events <- top_harmful_health_evtypes[1:top_n_filter_h,c("evtype_modified_final","health_damage2")]
-#top_n_harmful_health_events <- top_harmful_health_evtypes[1:15,"evtype_modified_final"]
 top_n_harmful_health_events
 ```
 
@@ -1033,28 +836,27 @@ top_n_harmful_health_events
  3 flood                           10012
  4 thunderstorm wind                5986
  5 thunderstorm lightning           5363
- 6 winter snow                      3441
+ 6 winter snow                      3351
  7 wind                             1821
  8 forest fire                      1543
  9 hurricane                        1462
-10 thunderstorm hail                1036
-11 fog                               779
-12 rip current                       587
+10 rip current                      1088
+11 thunderstorm hail                1036
+12 fog                               779
 13 heat wave                         539
-14 rip currents                      501
-15 dust storm                        441
+14 dust storm                        441
+15 ice storm                         441
 ```
 
-Here we will reduce our data to items of interest (selected top ## event types)...
+Here we will reduce our data to items of interest (selected top n event types)...
 
 
 ```r
+# note here we pick use the top n based on the event value, but group further by yearx
 economic <- filter(us_storms_final, economic_damage>0) %>%
-#	filter(yearx>=1995)%>% 
 	inner_join(top_n_harmful_economic_events, by = "evtype_modified_final") %>%
 #	group_by(yearx, region, evtype_modified_final)%>%
 	group_by(yearx, evtype_modified_final)%>%
-#	group_by(new_event_words5)%>%
 	summarize(economic_damage2=sum(economic_damage), 
 		  mean_economic_damage2=mean(economic_damage), 
 		  neconomic_damage2=n(),
@@ -1067,7 +869,6 @@ economic <- filter(us_storms_final, economic_damage>0) %>%
 ```
 
 ```r
-#	arrange(desc(mean_economic_damage2))
 print(economic,n=10)
 ```
 
@@ -1090,20 +891,11 @@ print(economic,n=10)
 ```
 
 ```r
-nrow(filter(us_storms_final, health_damage>0))
-```
-
-```
-[1] 13717
-```
-
-```r
+# note here we pick use the top n based on the event value, but group further by yearx
 health <- filter(us_storms_final, health_damage>0) %>%
-#	filter(yearx>=1995)%>% 
 	inner_join(top_n_harmful_health_events, by = "evtype_modified_final") %>%
 #	group_by(yearx, region, evtype_modified_final)%>%
 	group_by(yearx, evtype_modified_final)%>%
-#	group_by(new_event_words5)%>%
 	summarize(health_damage2=sum(health_damage), 
 		  mean_health_damage2=mean(health_damage), 
 		  nhealth_damage2=n(),
@@ -1117,19 +909,11 @@ health <- filter(us_storms_final, health_damage>0) %>%
 
 ```r
 #	arrange(desc(mean_health_damage2))
-nrow(health)
-```
-
-```
-[1] 211
-```
-
-```r
 print(health,n=top_n_filter_h)
 ```
 
 ```
-# A tibble: 211 x 6
+# A tibble: 222 x 6
    yearx evtype_modified… health_damage2 mean_health_dam… nhealth_damage2 xxxlog
    <dbl> <chr>                     <dbl>            <dbl>           <int>  <dbl>
  1  2011 tornado                    6750            28.0              241   3.83
@@ -1147,10 +931,13 @@ print(health,n=top_n_filter_h)
 13  2002 tornado                    1023            10.2              100   3.01
 14  2000 tornado                     923            10.4               89   2.97
 15  2004 hurricane                   862            95.8                9   2.94
-# … with 196 more rows
+# … with 207 more rows
 ```
 
-Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here we cover over 90% of the data using the above settings...
+Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here:
+
+1. using a top top_n_filter_e list, 98.3879035% of the universe/all events
+2. using a top top_n_filter_h list, 94.6668868% of the universe/all events
 
 
 ```r
@@ -1158,7 +945,7 @@ sum(economic$economic_damage2)/sum(sample_us_storms$economic_damage)
 ```
 
 ```
-[1] 0.9838945
+[1] 0.983879
 ```
 
 ```r
@@ -1166,7 +953,7 @@ sum(health$health_damage2)/sum(sample_us_storms$health_damage)
 ```
 
 ```
-[1] 0.9418393
+[1] 0.9466689
 ```
 
 ```r
@@ -1209,3 +996,7 @@ ggplot(health) +
 ```
 
 ![](PA2_template_files/figure-html/figure-1-health-harm-1.png)<!-- -->
+
+# Conclusion
+
+Some concluding remarks...
