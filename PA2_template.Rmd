@@ -1,0 +1,351 @@
+---
+title: "US Storm event data:  Economic and Health impacts analysis"
+author: "Ray Bem"
+date: "09/01/2020"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, highlight = TRUE, 
+		      comment = "", results = "markup", fig.width = 8, fig.height = 5)
+```
+
+# Synopsis
+
+Need to create the synopsis.
+
+# US Storm data -- Analysis using R
+
+#### Where does the data come from?
+NCDC receives Storm Data from the National Weather Service. The National Weather service receive their information from a variety of sources, which include but are not limited to: county, state an federal emergency management officials, local law enforcement officials, skywarn spotters, NW damage surveys, newspaper clipping services, the insurance industry and the general public.
+
+The purpose of this analysis is to assemble the analysis data, and report on key features observed.
+
+# Data Processing
+
+## Required R Packages, processing system details 
+
+The `tidyverse` package will suit this analysis (dplyr and ggplot2 specifically).  This work was developed on the following system:
+
+`r system("system_profiler SPHardwareDataType | grep 'Model Name:'", intern=TRUE)`
+`r system("system_profiler SPHardwareDataType | grep 'Processor Name:'", intern=TRUE)`
+`r system("system_profiler SPHardwareDataType | grep 'Memory:'", intern=TRUE)`
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+#### File naming details.
+```{r}
+raw_link <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+raw_zip_file_name <- "StormData.csv.bz2"
+raw_file_name <- "StormData.csv"
+```
+
+#### Get the file if necessary.
+
+```{r}
+ifelse(file.exists(raw_zip_file_name) == FALSE,
+       download.file(raw_link, raw_zip_file_name),
+       "file exists...you are good to go")
+```
+
+#### Make .csv available to examine raw data.
+
+The data in the beginning looks simple, but further down in the raw file very large text items, including large blank space are observed.
+
+```{r}
+ifelse(file.exists(raw_file_name) == FALSE,
+       bunzip2(raw_zip_file_name),
+       "StormData.csv exists")
+```
+
+```{r}
+raw_names <- read.csv(raw_file_name, header=TRUE, nrows = 1)
+raw_us_storms <- read.csv(raw_file_name, stringsAsFactors = FALSE)
+head(raw_us_storms)
+str(raw_us_storms)
+names(raw_us_storms) <- tolower(names(raw_names))
+
+nrow(raw_us_storms)
+new_refnum <- as.data.frame(seq(1:nrow(raw_us_storms)))
+names(new_refnum) <- "new_refnum"
+head(new_refnum)
+
+check_refnum <- raw_us_storms %>% select(refnum) %>% inner_join(new_refnum, by = c("refnum"="new_refnum"))
+head(check_refnum)
+nrow(raw_us_storms) == nrow(check_refnum)
+```
+
+#### take a sample to work with, it is easy to set to full data...
+
+```{r}
+set.seed(1234)
+sample_refnum_list <- as.data.frame(sample(raw_us_storms$refnum, 1 * nrow(raw_us_storms)))
+names(sample_refnum_list) <- "refnum"
+head(sample_refnum_list)
+```
+
+I chose to grab US "region" in case it is helpful in presentation...
+
+```{r}
+state_df <- data.frame(state.abb, state.region)
+names(state_df) <- c("state", "region")
+head(state_df)
+```
+
+Main work...choose a year cutoff.
+
+```{r}
+yearx_cutoff <- 1995
+
+sample_us_storms <- inner_join(raw_us_storms, sample_refnum_list, by = "refnum") %>%
+	filter(propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) %>%
+	left_join(state_df, by = "state") %>%
+	mutate(bgn_datex=mdy_hms(bgn_date),
+	       end_datex=mdy_hms(end_date),
+	       yearx=year(bgn_datex),
+	       monthx=month(bgn_datex),
+	       storm_seconds=end_datex-bgn_datex,
+	       storm_days=as.duration(storm_seconds)) %>% 
+	filter(yearx >= yearx_cutoff) %>%
+	select(refnum, region, state__:evtype, end_date, 
+	       bgn_datex, end_datex, yearx, monthx, storm_seconds, storm_days,
+	       fatalities, injuries,
+	       propdmg, propdmgexp,
+	       cropdmg, cropdmgexp) %>%
+	mutate(evtype_original = evtype) %>%
+	mutate(evtype=str_trim(tolower(evtype), side = "both")) %>%
+	mutate(newpropdmg=ifelse(toupper(propdmgexp)=="K",
+				 propdmg*1000,ifelse(toupper(propdmgexp)=="M",
+				 		    propdmg*1000000, ifelse(toupper(propdmgexp)=="B",
+				 		    			propdmg*1000000000,propdmg)))) %>%
+	mutate(newcropdmg=ifelse(toupper(cropdmgexp)=="K",
+				 cropdmg*1000,ifelse(toupper(cropdmgexp)=="M",
+				 		    cropdmg*1000000, ifelse(toupper(cropdmgexp)=="B",
+				 		    			cropdmg*1000000000,cropdmg)))) %>%
+	mutate(economic_damage=newpropdmg+newcropdmg,
+	       health_damage=fatalities+injuries)
+head(sample_us_storms)
+count(sample_us_storms,yearx)
+```
+
+figure out the maximum words involved in the event types...
+
+```{r}
+max_words_evtype <- raw_us_storms%>%
+	filter(propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) %>% 
+	mutate(word_count=lengths(strsplit(str_trim(tolower(evtype), side = "both"), split = " ")))%>%
+	summarize(max_words=max(word_count))
+max_words_evtype
+```
+
+The following were coded after reviewing the individual words...we want to remove some words that are included, but offer no consistent distinction (e.g., "heavy rain" can simply be "rain").
+
+We also take care to trim the values, some come to us in the data with leading and trailing blanks.
+
+```{r}
+word1x <-c("astronomical","black","drifting","dry",
+"downburst","excessive","extreme","flash","gusty",
+"hard","heavy","high","light","mixed",
+"record","severe","southeast",
+#"storm",
+"strong","summary","torrential","urban","sml",
+"wild","wintry")
+
+word2x<-c("advisory","august","damage","emily","erin",
+"high","mix","precip","roads","weather","weather/mix")
+
+word3x<-c("and","28","precip")
+
+word4x<-c("heavy")
+
+words_to_remove <- c(word1x, word2x, word3x, word4x, "hvy")
+```
+
+The words to drop get applied here
+
+```{r}
+modified_evtype <- raw_us_storms %>%
+	filter(propdmg > 0 | cropdmg > 0 | fatalities > 0 | injuries > 0) %>%
+	select(evtype) %>%
+	distinct(evtype) %>%
+	mutate(evtype_original = evtype) %>%
+	mutate(evtype = str_trim(tolower(evtype), side = "both")) %>%
+	mutate(evtype = gsub("/", " ", evtype)) %>%
+	mutate(evtype = gsub("-", " ", evtype)) %>%
+	mutate(
+		word1 = word(evtype, 1),
+		word2 = word(evtype, 2),
+		word3 = word(evtype, 3),
+		word4 = word(evtype, 4),
+		word5 = word(evtype, 5)) %>%
+	mutate(
+		word1 = ifelse(is.na(word1) == TRUE, "", str_trim(tolower(word1), side = "both")),
+		word2 = ifelse(is.na(word2) == TRUE, "", str_trim(tolower(word2), side = "both")),
+		word3 = ifelse(is.na(word3) == TRUE, "", str_trim(tolower(word3), side = "both")),
+		word4 = ifelse(is.na(word4) == TRUE, "", str_trim(tolower(word4), side = "both")),
+		word5 = ifelse(is.na(word5) == TRUE, "", str_trim(tolower(word5), side = "both"))) %>%
+	mutate(word1 = ifelse(word1 %in% words_to_remove, "", word1)) %>%
+	mutate(word2 = ifelse(word2 %in% words_to_remove, "", word2)) %>%
+	mutate(word3 = ifelse(word3 %in% words_to_remove, "", word3)) %>%
+	mutate(word4 = ifelse(word4 %in% words_to_remove, "", word4)) %>%
+	mutate(word5 = ifelse(word5 %in% words_to_remove, "", word5)) %>%
+	mutate(new_event_words = str_c(word1, word2, word3, word4, word5, sep = " ")) %>%
+	mutate(new_event_words2 = gsub("    ", " ", new_event_words)) %>%
+	mutate(new_event_words3 = gsub("   ", " ", new_event_words2)) %>%
+	mutate(new_event_words4 = gsub("  ", " ", new_event_words3)) %>% 
+	mutate(evtype_modified=str_trim(new_event_words4, side = "both")) %>%
+	select(evtype_original, evtype_modified) %>%
+	mutate(hail = grepl("hail", evtype_modified)) %>%
+	mutate(fld = grepl("fld", evtype_modified)) %>%
+	mutate(flood = grepl("flood", evtype_modified)) %>%
+	mutate(wind = grepl("wind", evtype_modified)) %>%
+	mutate(thu = grepl("thu", evtype_modified)) %>%
+	mutate(tst = grepl("tst", evtype_modified)) %>%
+	mutate(lightning = grepl("lightning", evtype_modified)) %>%
+	mutate(ice = grepl("ice", evtype_modified)) %>%
+	mutate(snow = grepl("snow", evtype_modified)) %>%
+	mutate(hurri = grepl("hurri", evtype_modified)) %>%
+	mutate(torn = grepl("torn", evtype_modified)) %>%
+	mutate(winter_storm = grepl("winter storm", evtype_modified))
+head(modified_evtype, 20)
+count(modified_evtype, hurri)
+```
+#yearx_cutoff <- 1995
+
+Now we will finalize the analysis data frame.  We use the evtype_modified field to redefine the event types.  Note the evtype_original variable contains the original, unadulterated values (for research/confirmation).
+
+```{r}
+us_storms_final <- sample_us_storms %>% 
+	# filter((economic_damage>0 | health_damage>0) & yearx >= yearx_cutoff) %>%
+#	filter(economic_damage>0 & yearx >= yearx_cutoff) %>%
+	left_join(modified_evtype, by = "evtype_original") %>% 
+#	mutate(new_event_words4=str_trim(new_event_words4, side = "both")) %>%
+	mutate(evtype_modified_final=ifelse(hurri==TRUE, "hurricane",
+				       ifelse(fld==TRUE | flood==TRUE, "flood",
+				              ifelse(hail==TRUE, "thunderstorm hail",
+				              ifelse(lightning==TRUE, "thunderstorm lightning",
+				              ifelse((thu==TRUE | tst==TRUE) & wind==FALSE & lightning==FALSE, "thunderstorm",
+				                     ifelse((thu==TRUE | tst==TRUE) & wind==TRUE, "thunderstorm wind",
+				                            ifelse((thu==TRUE | tst==TRUE) 
+				                                   #& wind==FALSE 
+				                                   & lightning==TRUE, "thunderstorm lightning",
+				                            ifelse(evtype_modified %in% c("forest fire", "forest fires", "wildfire"), 
+				                                   "forest fire",
+				                            ifelse(evtype_modified %in% c("snow", "blizzard", "snow sleet freezing rain","winter","winter storm"), 
+				                                   "winter snow",
+				                            evtype_modified))))))))))
+str(us_storms_final)
+us_storms_final%>%count(evtype, evtype_modified_final)
+```
+
+We will now determine how many items (event types) are worthy of display.  For example, to choose the "top 10 economic" events by assigning 10 to top_n_filter_e variable.  Assign the desired amount of top health data in a similar fashion.
+
+Further below we will see what this gives us in terms of "complete picture".
+
+```{r}
+top_n_filter_e <- 10
+top_n_filter_e <- 15
+top_n_filter_h <- 15
+
+top_harmful_economic_evtypes <- filter(us_storms_final, economic_damage>0) %>%
+	group_by(evtype_modified_final)%>%
+	summarize(economic_damage2=sum(economic_damage), 
+		  mean_economic_damage2=mean(economic_damage), 
+		  neconomic_damage2=n()) %>% 
+	arrange(desc(economic_damage2))
+#	arrange(desc(mean_economic_damage2))
+
+#top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter,"evtype_modified_final"]
+top_n_harmful_economic_events <- top_harmful_economic_evtypes[1:top_n_filter_e,"evtype_modified_final"]
+top_n_harmful_economic_events
+
+top_harmful_health_evtypes <- filter(us_storms_final, health_damage>0) %>%
+	group_by(evtype_modified_final)%>%
+	summarize(health_damage2=sum(health_damage), 
+		  mean_health_damage2=mean(health_damage), 
+		  nhealth_damage2=n()) %>% 
+	arrange(desc(health_damage2))
+#	arrange(desc(mean_health_damage2))
+sum(top_harmful_health_evtypes$health_damage2)
+top_n_harmful_health_events <- top_harmful_health_evtypes[1:top_n_filter_h,c("evtype_modified_final","health_damage2")]
+#top_n_harmful_health_events <- top_harmful_health_evtypes[1:15,"evtype_modified_final"]
+top_n_harmful_health_events
+```
+
+Here we will reduce our data to items of interest (selected top ## event types)...
+
+```{r}
+economic <- filter(us_storms_final, economic_damage>0) %>%
+#	filter(yearx>=1995)%>% 
+	inner_join(top_n_harmful_economic_events, by = "evtype_modified_final") %>%
+#	group_by(yearx, region, evtype_modified_final)%>%
+	group_by(yearx, evtype_modified_final)%>%
+#	group_by(new_event_words5)%>%
+	summarize(economic_damage2=sum(economic_damage), 
+		  mean_economic_damage2=mean(economic_damage), 
+		  neconomic_damage2=n(),
+		  xxxlog=log10(economic_damage2)) %>% 
+	arrange(desc(economic_damage2))
+#	arrange(desc(mean_economic_damage2))
+print(economic,n=10)
+
+nrow(filter(us_storms_final, health_damage>0))
+health <- filter(us_storms_final, health_damage>0) %>%
+#	filter(yearx>=1995)%>% 
+	inner_join(top_n_harmful_health_events, by = "evtype_modified_final") %>%
+#	group_by(yearx, region, evtype_modified_final)%>%
+	group_by(yearx, evtype_modified_final)%>%
+#	group_by(new_event_words5)%>%
+	summarize(health_damage2=sum(health_damage), 
+		  mean_health_damage2=mean(health_damage), 
+		  nhealth_damage2=n(),
+		  xxxlog=log10(health_damage2)) %>% ungroup %>%
+	arrange(desc(health_damage2))
+#	arrange(desc(mean_health_damage2))
+nrow(health)
+print(health,n=top_n_filter_h)
+```
+
+Finally, we calculate the total of selected data and divide by the total of all data (obviously per economic/health topic).  We confirm here we cover over 90% of the data using the above settings...
+
+```{r}
+sum(economic$economic_damage2)/sum(sample_us_storms$economic_damage)
+sum(health$health_damage2)/sum(sample_us_storms$health_damage)
+# sum(sample_us_storms$injuries)
+# sum(sample_us_storms$fatalities)
+# sum(raw_us_storms$injuries)
+# sum(raw_us_storms$fatalities)
+
+#filter(sample_us_storms, health_damage>0 & yearx>=yearx)%>%summarize(sumx=sum(injuries))
+```
+
+# Results
+
+Now for some plots...
+
+```{r 'figure-1-economic-harm'}
+options(scipen = 5)
+
+ggplot(economic) +
+	geom_col(mapping = aes(x=yearx, 
+#			      y=xxxlog, 
+			      y=economic_damage2, 
+			      fill=evtype_modified_final), alpha=.7) + 
+	scale_y_log10() +
+	facet_wrap("evtype_modified_final")
+```
+
+```{r 'figure-1-health-harm'}
+ggplot(health) +
+	geom_col(mapping = aes(x=yearx, 
+#			      y=xxxlog, 
+			      y=health_damage2, 
+			      fill=evtype_modified_final), alpha=.7) + 
+	scale_y_log10() +
+	facet_wrap("evtype_modified_final")
+```
